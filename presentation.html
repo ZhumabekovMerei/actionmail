@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email 2.0 (ActionMail) — Enterprise Presentation Deck</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #090d16;
+      color: #f8fafc;
+      overflow: hidden;
+      user-select: none;
+    }
+    .slide {
+      display: none;
+      opacity: 0;
+      transform: scale(0.98);
+      transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .slide.active {
+      display: flex;
+      opacity: 1;
+      transform: scale(1);
+    }
+    .glass-card {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .gradient-text {
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .gradient-border {
+      position: relative;
+    }
+    .gradient-border::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.5), rgba(129, 140, 248, 0.2), transparent);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col justify-between p-6 md:p-10 relative">
+
+  <!-- Background Decorative Glows -->
+  <div class="absolute top-0 left-1/4 w-96 h-96 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+  <!-- Header / Top Bar -->
+  <header class="flex items-center justify-between z-10">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-lg tracking-tight">ActionMail</span>
+          <span class="px-2 py-0.5 text-xs font-semibold bg-sky-500/20 text-sky-400 border border-sky-500/30 rounded-full">Email 2.0</span>
+        </div>
+        <p class="text-xs text-slate-400">Interactive Enterprise Workspace</p>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="flex items-center gap-4">
+      <span id="slide-counter" class="text-xs font-mono text-slate-400 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700">01 / 11</span>
+      <div class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700">
+        <button onclick="prevSlide()" class="p-2 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors" title="Назад (←)">
+          <i data-lucide="chevron-left" class="w-4 h-4"></i>
+        </button>
+        <button onclick="nextSlide()" class="p-2 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors" title="Вперед (→)">
+          <i data-lucide="chevron-right" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <button onclick="toggleFullscreen()" class="p-2.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl border border-slate-700 transition-colors" title="Полноэкранный режим (F)">
+        <i data-lucide="maximize-2" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- Slide Canvas -->
+  <main class="flex-1 my-4 flex items-center justify-center z-10 max-w-7xl w-full mx-auto">
+    
+    <!-- SLIDE 1: Title & Vision -->
+    <section class="slide active flex-col items-center text-center justify-center max-w-4xl space-y-8">
+      <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card border border-sky-500/30 text-sky-300 text-sm font-medium">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Корпоративная операционная среда нового поколения
+      </div>
+      <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight leading-tight">
+        Превращаем Email в <br><span class="gradient-text">Actionable Workspace</span>
+      </h1>
+      <p class="text-lg md:text-xl text-slate-300 leading-relaxed max-w-2xl mx-auto">
+        Перестаньте просто читать почту. Согласовывайте отпуска, счета, доступы и подписывайте документы с ЭЦП/FaceID <strong>в 1 клик внутри письма</strong> без открытия сторонних СЭД и ERP.
+      </p>
+      
+      <!-- Comparison Mini Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full text-left pt-4">
+        <div class="glass-card p-5 rounded-2xl border border-red-500/20 bg-red-950/10">
+          <div class="flex items-center gap-2 text-red-400 font-semibold text-sm mb-2">
+            <i data-lucide="x-circle" class="w-4 h-4"></i> Email 1.0 (Традиционный)
+          </div>
+          <p class="text-xs text-slate-400">Пассивный текст $ightarrow$ Переход по ссылке $ightarrow$ Логин в 1С/Jira $ightarrow$ VPN $ightarrow$ Поиск кнопки $ightarrow$ Потеря контекста.</p>
+        </div>
+        <div class="glass-card p-5 rounded-2xl border border-emerald-500/30 bg-emerald-950/10">
+          <div class="flex items-center gap-2 text-emerald-400 font-semibold text-sm mb-2">
+            <i data-lucide="check-circle" class="w-4 h-4"></i> Email 2.0 (ActionMail)
+          </div>
+          <p class="text-xs text-slate-300">Письмо = живая форма. Согласование в 1 клик, встроенный FaceID, авто-обновление статуса в реальном времени у всей команды.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 2: Why Email > 1000 Web Frontends -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Архитектурный фундамент</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Почему Email лучше 1 000 изолированных веб-фронтендов</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">EDA & Zero Trust</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
+            <i data-lucide="database" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Письмо как Event Instance</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            В Event-Driven Architecture каждое письмо — это самодостаточный зафиксированный контекст события (JSON-схема + данные + State ID). Никаких промежуточных поломок.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Защита контура и Zero Trust</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            1С, SAP, биллинги и БД <strong>физически не выставляются в интернет</strong>. Они асинхронно публикуют события в закрытый шлюз. Риск SQL-инъекций на ядро сведен к нулю.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="cpu" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Снятие High-Load нагрузки</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            При рассылке расчетных листков на 50 000 сотрудников ERP-система не падает от наплыва сессий. Рендеринг берет клиент, а действия буферизуются в очереди.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-card p-4 rounded-xl border border-slate-700/60 flex items-center gap-4 bg-slate-900/60">
+        <i data-lucide="info" class="w-6 h-6 text-sky-400 shrink-0"></i>
+        <p class="text-xs text-slate-300">
+          <strong>Вывод для CISO & CTO:</strong> Бизнес экономит до 70% бюджета на создание и поддержку мобильных веб-интерфейсов для каждой внутренней СЭД, сохраняя непробиваемый периметр ИБ.
+        </p>
+      </div>
+    </section>
+
+    <!-- SLIDE 3: 4 UX Modes -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Пользовательский опыт</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">4 проекции одного почтового ящика</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Zero Learning Curve</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 hover:border-sky-500/50 transition-all flex flex-col justify-between space-y-4">
+          <div class="space-y-2">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 text-red-400 flex items-center justify-center">
+              <i data-lucide="mail" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-base text-white">Gmail View</h4>
+            <p class="text-xs text-slate-400">Классический 3-панельный сплит. Список писем с бейджами + интерактивный бланк в теле.</p>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 uppercase">Для работы на ПК</span>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 hover:border-indigo-500/50 transition-all flex flex-col justify-between space-y-4">
+          <div class="space-y-2">
+            <div class="w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+              <i data-lucide="message-square" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-base text-white">Spike Chat View</h4>
+            <p class="text-xs text-slate-400">Conversational UI. Переписка как в мессенджере, а формы — как интерактивные бот-виджеты.</p>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 uppercase">Для быстрых согласований</span>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 hover:border-amber-500/50 transition-all flex flex-col justify-between space-y-4">
+          <div class="space-y-2">
+            <div class="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <i data-lucide="trello" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-base text-white">Kanban View</h4>
+            <p class="text-xs text-slate-400">Triage-доска: Входящие $ightarrow$ На проверке $ightarrow$ Согласовано $ightarrow$ Отклонено.</p>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 uppercase">Контроль процессов</span>
+        </div>
+
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 hover:border-emerald-500/50 transition-all flex flex-col justify-between space-y-4">
+          <div class="space-y-2">
+            <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+              <i data-lucide="calendar" class="w-5 h-5"></i>
+            </div>
+            <h4 class="font-bold text-base text-white">Calendar View</h4>
+            <p class="text-xs text-slate-400">Автоматическая проекция писем с датами (отпуска, командировки, дедлайны оплат) на сетку.</p>
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 uppercase">Таймлайн событий</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 4: Architecture & Sandboxed Mini-Apps -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Техническая архитектура</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Шлюз, SSO и Sandboxed Mini-Apps</h2>
+        </div>
+        <span class="text-xs bg-sky-500/20 text-sky-400 px-3 py-1 rounded-full border border-sky-500/30">WeChat / Telegram Pattern</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+        <!-- Schema Block -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 font-mono text-xs text-slate-300 space-y-2">
+          <div class="text-slate-500 pb-1 border-b border-slate-800 flex justify-between">
+            <span>ACTIONMAIL PROTOCOL</span>
+            <span class="text-emerald-400">MIME / JSON-Schema</span>
+          </div>
+          <p class="text-sky-400">Content-Type: application/vnd.richform+json</p>
+          <pre class="text-[11px] text-slate-400 bg-slate-950 p-3 rounded-lg overflow-x-auto leading-tight">
+{
+  "workflowId": "wf-vacation-2026-08",
+  "status": "pending",
+  "assignedGroup": "dept_managers",
+  "schema": { ... },
+  "actions": [
+    { "id": "approve", "label": "Согласовать с FaceID", "sign": "biometric" },
+    { "id": "reject", "label": "Отклонить", "variant": "danger" }
+  ],
+  "miniAppUrl": "sandbox://company.internal/seat-picker"
+}</pre>
+        </div>
+
+        <!-- Explanations -->
+        <div class="space-y-4">
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="key" class="w-4 h-4 text-sky-400"></i> Корпоративный SSO & Identity
+            </h4>
+            <p class="text-xs text-slate-400">Поддержка Keycloak, Microsoft Entra ID, SAML 2.0 и OpenID Connect для мгновенного входа.</p>
+          </div>
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="box" class="w-4 h-4 text-indigo-400"></i> Sandboxed WebView Mini-Apps
+            </h4>
+            <p class="text-xs text-slate-400">Для сложных сценариев (бронь места на 2D-карте офиса, конфигуратор номенклатуры) письмо открывает изолированный Mini-App с авто-передачей контекста.</p>
+          </div>
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="refresh-cw" class="w-4 h-4 text-emerald-400"></i> Реалтайм-шина состояний
+            </h4>
+            <p class="text-xs text-slate-400">Valkey/MQTT брокер моментально синхронизирует действия между вкладками и смартфонами сотрудников.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 5: Competitor Landscape -->
+    <section class="slide flex-col justify-center w-full space-y-5">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Рыночный анализ</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Матрица конкурентов и позиционирование</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Market Matrix</span>
+      </div>
+
+      <div class="overflow-hidden rounded-2xl border border-slate-700 glass-card">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-800/80 text-slate-300 uppercase tracking-wider font-semibold border-b border-slate-700">
+            <tr>
+              <th class="p-3.5">Игрок</th>
+              <th class="p-3.5">Сильные стороны</th>
+              <th class="p-3.5">Ограничения</th>
+              <th class="p-3.5 text-sky-400">Что перенимает ActionMail</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td class="p-3.5 font-bold text-white">Microsoft Actionable Messages</td>
+              <td class="p-3.5 text-slate-400">Стандарт Adaptive Cards, интеграция с Outlook.</td>
+              <td class="p-3.5 text-slate-400">Привязка к экосистеме MS 365, нет реалтайм исчезновения решенных писем.</td>
+              <td class="p-3.5 text-sky-300">Декларативную JSON-схему карточек.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-bold text-white">Spike (spikenow.com)</td>
+              <td class="p-3.5 text-slate-400">Эталонный Conversational UI, очистка от мусора цитат.</td>
+              <td class="p-3.5 text-slate-400">Нет B2B-форм, BPMN-процессов и интеграции с ЭЦП.</td>
+              <td class="p-3.5 text-sky-300">Мессенджер-вид и логику склейки тредов.</td>
+            </tr>
+            <tr>
+              <td class="p-3.5 font-bold text-white">Front / Missive</td>
+              <td class="p-3.5 text-slate-400">Shared Inboxes для команд, комментирование писем.</td>
+              <td class="p-3.5 text-slate-400">Высокая цена ($30-80/юзер), сторонние формы — только боковые iframe.</td>
+              <td class="p-3.5 text-sky-300">Концепцию общих очередей и назначения ответственных.</td>
+            </tr>
+            <tr class="bg-sky-950/20 border-t border-sky-500/30">
+              <td class="p-3.5 font-bold text-sky-400 flex items-center gap-1.5">
+                <i data-lucide="zap" class="w-3.5 h-3.5 text-sky-400"></i> ActionMail (Email 2.0)
+              </td>
+              <td class="p-3.5 text-slate-200" colspan="3">
+                <strong>Синтез лучшего:</strong> Открытый стандарт + 4 режима отображения + Встроенный FaceID/ЭЦП + Реалтайм синхронизация + Public Folders.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SLIDE 6: Public Folders 2.0 -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Корпоративное пространство</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Public Folders 2.0: Возрождение классики</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Team Queues & RBAC</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Visual Tree -->
+        <div class="glass-card p-5 rounded-2xl border border-slate-700 font-mono text-xs space-y-2 bg-slate-950/60">
+          <div class="text-slate-400 font-semibold mb-3 flex items-center gap-2">
+            <i data-lucide="folder-tree" class="w-4 h-4 text-sky-400"></i> НАВИГАЦИЯ ОБЩИХ ПАПОК
+          </div>
+          <div class="space-y-2 text-slate-300 pl-2 border-l border-slate-800">
+            <div class="flex items-center gap-2 text-sky-300 font-medium">
+              <i data-lucide="folder" class="w-4 h-4 text-sky-400"></i> 01_Приказы_и_регламенты (Только чтение)
+            </div>
+            <div class="pl-6 text-slate-400 text-[11px]">└─ 📄 Приказ_об_отпусках_2026.pdf [ЭЦП]</div>
+            
+            <div class="flex items-center gap-2 text-amber-300 font-medium pt-2">
+              <i data-lucide="folder" class="w-4 h-4 text-amber-400"></i> 02_Бухгалтерия (Входящие счета)
+            </div>
+            <div class="pl-6 text-slate-400 text-[11px]">└─ 🏷️ Счет #459 - Hetzner Cloud [На проверке]</div>
+            
+            <div class="flex items-center gap-2 text-indigo-300 font-medium pt-2">
+              <i data-lucide="folder" class="w-4 h-4 text-indigo-400"></i> 03_IT_Helpdesk (Общая очередь)
+            </div>
+            <div class="pl-6 text-slate-400 text-[11px]">└─ 💻 Доступ к Gitlab (Иван И.) [Свободно]</div>
+          </div>
+        </div>
+
+        <!-- Mechanics -->
+        <div class="space-y-4">
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="users" class="w-4 h-4 text-sky-400"></i> Механика взятия в работу (Claim System)
+            </h4>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Заявка в общей папке видна всему отделу. Как только специалист нажимает «Взять в работу», у остальных заявка переходит в статус занятой с аватаром исполнителя.
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="lock" class="w-4 h-4 text-emerald-400"></i> Гранулярный доступ (RBAC & ACL)
+            </h4>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Гибкая настройка прав: «Только чтение приказов», «Право создания заявок», «Администрирование папки отдела».
+            </p>
+          </div>
+
+          <div class="glass-card p-4 rounded-xl border border-slate-700 space-y-1">
+            <h4 class="font-bold text-sm text-white flex items-center gap-2">
+              <i data-lucide="archive" class="w-4 h-4 text-indigo-400"></i> Авто-архивация завершенных дел
+            </h4>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              После финального согласования заявка автоматически перемещается из рабочей папки в структурированный архив.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 7: Security, FaceID & FinTech -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Безопасность & Финтех</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Встроенные Action-модули: ЭЦП, FaceID и Платежи</h2>
+        </div>
+        <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30">Native Security</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center">
+            <i data-lucide="scan-face" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">FaceID & Биометрия</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Мгновенная биометрическая верификация через WebAuthn/Passkeys за 1.5 секунды. Идеально для рутинных подтверждений (отпуска, доступы).
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center">
+            <i data-lucide="file-check-2" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">Юридическая ЭЦП (GOST/RSA)</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Подписание служебных записок и приказов ключами ЭЦП (NCALayer / eGov QR / .p12) с генерацией валидного штампа времени и SHA-256 хеша.
+          </p>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl gradient-border space-y-3">
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+            <i data-lucide="credit-card" class="w-6 h-6"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white">B2B-Оплата в 1 клик</h3>
+          <p class="text-xs text-slate-400 leading-relaxed">
+            Оплата выставленных счетов через Kaspi B2B / корпоративные карты прямо из письма с авто-прикреплением платежки в тред и закрытием в 1С.
+          </p>
+        </div>
+      </div>
+
+      <div class="glass-card p-4 rounded-xl border border-slate-700 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <i data-lucide="shield-alert" class="w-5 h-5 text-amber-400"></i>
+          <span class="text-xs text-slate-300 font-medium">Защита от повторного исполнения (Idempotency Key) встроена в каждый запрос</span>
+        </div>
+        <span class="text-xs text-emerald-400 font-mono">100% Audit Trail Verified</span>
+      </div>
+    </section>
+
+    <!-- SLIDE 8: Multi-Step Workflow Engine -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Оркестрация процессов</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Легковесный оркестратор цепочек согласования</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Lightweight Workflow Engine</span>
+      </div>
+
+      <!-- Step Timeline -->
+      <div class="glass-card p-6 rounded-2xl border border-slate-700 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+          
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-sky-400">ШАГ 1</span>
+              <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <h4 class="font-bold text-sm text-white">Инициатор</h4>
+            <p class="text-[11px] text-slate-400">Заполняет форму «Заявка на обучение» в 1 клик.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-indigo-400">ШАГ 2</span>
+              <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            </div>
+            <h4 class="font-bold text-sm text-white">Тимлид</h4>
+            <p class="text-[11px] text-slate-400">Подтверждает через FaceID прямо из письма.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-sky-500/50 space-y-2 shadow-lg shadow-sky-500/10">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-amber-400">ШАГ 3 (ТЕКУЩИЙ)</span>
+              <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+            </div>
+            <h4 class="font-bold text-sm text-white">Бухгалтерия</h4>
+            <p class="text-[11px] text-slate-300">Проверяет лимиты бюджета и подписывает с ЭЦП.</p>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 opacity-60 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-500">ШАГ 4</span>
+              <i data-lucide="clock" class="w-4 h-4 text-slate-500"></i>
+            </div>
+            <h4 class="font-bold text-sm text-white">1С / HR</h4>
+            <p class="text-[11px] text-slate-500">Автоматическое проведение приказа и выплата.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-xs">
+          <div class="flex items-center gap-2 text-slate-400">
+            <i data-lucide="git-branch" class="w-4 h-4 text-sky-400"></i> Динамический роутинг письма
+          </div>
+          <div class="flex items-center gap-2 text-slate-400">
+            <i data-lucide="bell-ring" class="w-4 h-4 text-amber-400"></i> Контроль дедлайнов и SLA-пуши
+          </div>
+          <div class="flex items-center gap-2 text-slate-400">
+            <i data-lucide="history" class="w-4 h-4 text-emerald-400"></i> Неизменяемый Audit Log в треде
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 9: Backward Compatibility -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Совместимость со стандартами</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">100% Обратная совместимость</h2>
+        </div>
+        <span class="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700">Progressive Enhancement</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="glass-card p-6 rounded-2xl border border-sky-500/40 space-y-3 bg-sky-950/10">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold text-white">В нашем клиенте (ActionMail 2.0)</h3>
+            <span class="text-xs font-mono text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full">Rich Mode</span>
+          </div>
+          <ul class="text-xs text-slate-300 space-y-2">
+            <li class="flex items-center gap-2">✓ Нативная интерактивная форма прямо в теле</li>
+            <li class="flex items-center gap-2">✓ Кнопки действий с биометрией и ЭЦП</li>
+            <li class="flex items-center gap-2">✓ Реалтайм-обновление статусов у коллег</li>
+            <li class="flex items-center gap-2">✓ Авто-скрытие решенных заявок из входящих</li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-700 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold text-white">В сторонних клиентах (Apple Mail, Thunderbird)</h3>
+            <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full">HTML Fallback</span>
+          </div>
+          <ul class="text-xs text-slate-400 space-y-2">
+            <li class="flex items-center gap-2">✓ Аккуратно сверстанный читаемый HTML-бланк</li>
+            <li class="flex items-center gap-2">✓ Таблица всех параметров заявки</li>
+            <li class="flex items-center gap-2 text-sky-300">✓ Кнопка: [👉 Открыть и подписать в браузере]</li>
+            <li class="flex items-center gap-2">✓ Безопасная одноразовая JWT-ссылка (Magic Link)</li>
+          </ul>
+        </div>
+      </div>
+
+      <p class="text-xs text-center text-slate-400">
+        Используется стандартный SMTP/IMAP/JMAP транспорт. Ни одно письмо не сломается и не потеряется у внешних контрагентов.
+      </p>
+    </section>
+
+    <!-- SLIDE 10: Business Impact -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">Бизнес-эффект</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Измеримый экономический эффект</h2>
+        </div>
+        <span class="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30">ROI & Metrics</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-center">
+        <div class="glass-card p-8 rounded-2xl gradient-border space-y-3">
+          <span class="text-5xl font-extrabold gradient-text">8 минут</span>
+          <h4 class="text-base font-bold text-white">Time-to-Approve</h4>
+          <p class="text-xs text-slate-400">Вместо прежних 18 часов в среднем благодаря согласованию в 1 клик с мобильных устройств.</p>
+        </div>
+
+        <div class="glass-card p-8 rounded-2xl gradient-border space-y-3">
+          <span class="text-5xl font-extrabold text-emerald-400">-70%</span>
+          <h4 class="text-base font-bold text-white">Экономия IT-бюджета</h4>
+          <p class="text-xs text-slate-400">Отказ от дорогой разработки и поддержки десятков отдельных мобильных веб-фронтов.</p>
+        </div>
+
+        <div class="glass-card p-8 rounded-2xl gradient-border space-y-3">
+          <span class="text-5xl font-extrabold text-indigo-400">-65%</span>
+          <h4 class="text-base font-bold text-white">Разгрузка Helpdesk & HR</h4>
+          <p class="text-xs text-slate-400">Полное исключение дублирующих вопросов «Какой статус у моей служебки?». Все видно в треде.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SLIDE 11: Roadmap & Next Steps -->
+    <section class="slide flex-col justify-center w-full space-y-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs font-bold text-sky-400 uppercase tracking-wider">План реализации</span>
+          <h2 class="text-3xl md:text-4xl font-bold mt-1">Дорожная карта проекта (Roadmap)</h2>
+        </div>
+        <span class="text-xs bg-sky-500/20 text-sky-400 px-3 py-1 rounded-full border border-sky-500/30">3 Phases</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-card p-6 rounded-2xl border border-sky-500/40 bg-sky-950/10 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-sky-400">ФАЗА 1 (ТЕКУЩАЯ)</span>
+            <span class="w-2 h-2 rounded-full bg-sky-400 animate-pulse"></span>
+          </div>
+          <h3 class="text-lg font-bold text-white">Interactive POC</h3>
+          <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+            <li>Single-File SPA без бэкенда</li>
+            <li>Реалтайм синхронизация вкладок</li>
+            <li>4 режима (Gmail/Spike/Kanban/Calendar)</li>
+            <li>Модуль FaceID и ЭЦП моков</li>
+            <li>No-Code конструктор форм</li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-700 space-y-3">
+          <span class="text-xs font-bold text-slate-400">ФАЗА 2 (Q4 2026)</span>
+          <h3 class="text-lg font-bold text-white">MVP Gateway</h3>
+          <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Легковесный шлюз Bun.js + SQLite/Valkey</li>
+            <li>MQTT WebSocket брокер</li>
+            <li>JMAP/IMAP проксирование писем</li>
+            <li>Пилот в отделе на 200 пользователей</li>
+          </ul>
+        </div>
+
+        <div class="glass-card p-6 rounded-2xl border border-slate-700 space-y-3">
+          <span class="text-xs font-bold text-slate-400">ФАЗА 3 (2027)</span>
+          <h3 class="text-lg font-bold text-white">Enterprise Platform</h3>
+          <ul class="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
+            <li>Коннекторы к 1С, Jira, Documentolog</li>
+            <li>Интеграция с NCALayer & eGov QR</li>
+            <li>Public Folders 2.0 & Корпоративный SSO</li>
+            <li>Кастомные Sandboxed Mini-Apps</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-center pt-2">
+        <button onclick="goToSlide(0)" class="px-6 py-3 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-sky-500/25 transition-all text-sm flex items-center gap-2">
+          <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Начать презентацию сначала
+        </button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer / Bottom Navigation Bar -->
+  <footer class="flex items-center justify-between z-10 text-xs text-slate-500 border-t border-slate-800/80 pt-4">
+    <div class="flex items-center gap-4">
+      <span>Навигация: <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">←</kbd> <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">→</kbd> или <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">Пробел</kbd></span>
+      <span>|</span>
+      <span>Полный экран: <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300">F</kbd></span>
+    </div>
+    <div class="text-right">
+      <span>ActionMail 2.0 Architecture & Strategy</span>
+    </div>
+  </footer>
+
+  <!-- Interactive Slide Controller Script -->
+  <script>
+    lucide.createIcons();
+
+    let currentSlide = 0;
+    const slides = document.querySelectorAll('.slide');
+    const totalSlides = slides.length;
+    const counter = document.getElementById('slide-counter');
+
+    function updateSlides() {
+      slides.forEach((slide, idx) => {
+        slide.classList.toggle('active', idx === currentSlide);
+      });
+      counter.textContent = `${String(currentSlide + 1).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+      lucide.createIcons();
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides - 1) {
+        currentSlide++;
+        updateSlides();
+      }
+    }
+
+    function prevSlide() {
+      if (currentSlide > 0) {
+        currentSlide--;
+        updateSlides();
+      }
+    }
+
+    function goToSlide(idx) {
+      currentSlide = idx;
+      updateSlides();
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {});
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    // Keyboard bindings
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'Space') {
+        e.preventDefault();
+        nextSlide();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        prevSlide();
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullscreen();
+      }
+    });
+
+    // Touch swipe support
+    let touchStartX = 0;
+    let touchEndX = 0;
+    window.addEventListener('touchstart', e => { touchStartX = e.changedTouches[0].screenX; });
+    window.addEventListener('touchend', e => {
+      touchEndX = e.changedTouches[0].screenX;
+      if (touchStartX - touchEndX > 50) nextSlide();
+      if (touchEndX - touchStartX > 50) prevSlide();
+    });
+  </script>
+</body>
+</html>

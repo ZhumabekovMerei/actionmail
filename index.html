@@ -13,6 +13,10 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <!-- MQTT.js over WebSockets — lets separate browsers/devices exchange messages via a public
+       broker, with no backend of our own. Falls back to same-tab-group BroadcastChannel sync
+       only if this fails to load (offline, ad-blocker, etc). -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@500;700&display=swap');
@@ -209,27 +213,92 @@
               <div class="font-semibold text-slate-900 leading-tight text-[11px]">{{ currentUser.name }}</div>
               <div class="text-[10px] text-slate-500 leading-tight">{{ currentUser.role }}</div>
             </div>
+            <span
+              class="w-2 h-2 rounded-full shrink-0"
+              :class="mqttStatus === 'connected' ? 'bg-emerald-500' : (mqttStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300')"
+              :title="mqttStatus === 'connected' ? 'Онлайн-синхронизация активна (комната: ' + mqttRoomId + ')' : (mqttStatus === 'connecting' ? 'Подключение к серверу сообщений...' : 'Офлайн — только локальная синхронизация вкладок')"
+            ></span>
             <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-500"></i>
           </button>
 
-          <div 
-            v-if="showUserDropdown" 
-            class="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 text-xs"
+          <div
+            v-if="showUserDropdown"
+            class="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 text-xs"
           >
-            <div class="text-[10px] uppercase tracking-wider text-slate-400 px-2 py-1 font-bold">Сменить Персону:</div>
-            <button 
-              v-for="user in demoUsers" 
+            <div class="text-[10px] uppercase tracking-wider text-slate-400 px-2 py-1 font-bold">Войти как:</div>
+            <button
+              v-for="user in demoUsers"
               :key="user.id"
               @click="switchUser(user)"
               :class="currentUser.id === user.id ? 'bg-slate-100 text-slate-900 font-semibold' : 'hover:bg-slate-50 text-slate-700'"
               class="w-full text-left p-2 rounded-lg flex items-center gap-2.5 my-0.5 transition-all text-xs"
             >
               <img :src="user.avatar" class="w-6 h-6 rounded-full object-cover border border-slate-200" />
-              <div>
-                <div class="leading-tight">{{ user.name }}</div>
-                <div class="text-[10px] text-slate-400 font-normal">{{ user.role }}</div>
+              <div class="min-w-0">
+                <div class="leading-tight truncate">{{ user.name }}</div>
+                <div class="text-[10px] text-slate-400 font-normal truncate">{{ user.role }}</div>
               </div>
+              <i v-if="currentUser.id === user.id" data-lucide="check" class="w-3.5 h-3.5 text-slate-500 ml-auto shrink-0"></i>
             </button>
+
+            <div class="h-px bg-slate-100 my-1"></div>
+
+            <div v-if="!showAddAccountForm">
+              <button @click="showAddAccountForm = true" class="w-full text-left p-2 hover:bg-slate-50 text-slate-700 rounded-lg flex items-center gap-2.5 text-xs">
+                <div class="w-6 h-6 rounded-full bg-slate-100 border border-dashed border-slate-300 flex items-center justify-center shrink-0">
+                  <i data-lucide="plus" class="w-3.5 h-3.5 text-slate-500"></i>
+                </div>
+                <span>Добавить аккаунт</span>
+              </button>
+            </div>
+            <div v-else class="p-2 space-y-1.5" @click.stop>
+              <input
+                v-model="newAccountName"
+                @keyup.enter="createAccount"
+                type="text"
+                placeholder="Имя и фамилия"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-slate-400"
+              />
+              <input
+                v-model="newAccountRole"
+                @keyup.enter="createAccount"
+                type="text"
+                placeholder="Должность (необязательно)"
+                class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-slate-400"
+              />
+              <div class="flex gap-1.5 pt-0.5">
+                <button @click="showAddAccountForm = false" class="flex-1 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg text-[11px] font-medium">Отмена</button>
+                <button @click="createAccount" class="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold">Создать</button>
+              </div>
+            </div>
+
+            <div class="h-px bg-slate-100 my-1"></div>
+
+            <!-- Cross-device sync via a public MQTT broker — anyone who joins the same "room"
+                 sees each other's mail live, from separate browsers/devices, with no backend. -->
+            <div class="p-2 space-y-1.5" @click.stop>
+              <div class="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                <span
+                  class="w-1.5 h-1.5 rounded-full shrink-0"
+                  :class="mqttStatus === 'connected' ? 'bg-emerald-500' : (mqttStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-slate-300')"
+                ></span>
+                Синхронизация между устройствами
+              </div>
+              <div class="text-[10px] text-slate-500 leading-snug">
+                {{ mqttStatus === 'connected' ? 'Подключено. Все, кто в этой же комнате, видят новые письма мгновенно.' : (mqttStatus === 'connecting' ? 'Подключение к публичному серверу сообщений...' : 'Нет сети — синхронизация только между вкладками этого браузера.') }}
+              </div>
+              <div class="flex gap-1.5">
+                <input
+                  v-model="mqttRoomInput"
+                  @keyup.enter="changeMqttRoom(mqttRoomInput)"
+                  type="text"
+                  placeholder="Название комнаты"
+                  class="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 text-xs focus:outline-none focus:border-slate-400"
+                />
+                <button @click="changeMqttRoom(mqttRoomInput)" class="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold shrink-0">Войти</button>
+              </div>
+              <div class="text-[10px] text-slate-400">Текущая: <span class="font-mono text-slate-600">{{ mqttRoomId }}</span> — поделитесь этим именем, чтобы писать друг другу</div>
+            </div>
           </div>
         </div>
 
@@ -237,14 +306,23 @@
     </header>
 
     <!-- MAIN WORKSPACE -->
-    <div class="flex-1 flex overflow-hidden">
-      
+    <div class="flex-1 flex overflow-hidden relative">
+
+      <!-- Mobile-only backdrop: dims the page and closes the sidebar on outside tap, so opening
+           it overlays instead of squeezing the inbox into a sliver on phones. -->
+      <div
+        v-if="showSidebar"
+        @click="showSidebar = false"
+        class="fixed top-16 inset-x-0 bottom-0 bg-black/30 z-30 md:hidden"
+      ></div>
+
       <!-- LEFT SIDEBAR (Gmail Rounded Style) — collapses smoothly via the header hamburger button.
            Outer <aside> animates width/opacity; the inner div keeps a fixed w-60 so content never
-           reflows mid-transition, it just slides out of view. -->
+           reflows mid-transition, it just slides out of view. On phones it's a fixed overlay above
+           the backdrop; from md up it sits inline and pushes the inbox over as before. -->
       <aside
         :class="showSidebar ? 'w-60 opacity-100' : 'w-0 opacity-0'"
-        class="border-r border-slate-200 bg-white shrink-0 overflow-hidden transition-all duration-300 ease-in-out flex"
+        class="fixed md:relative top-16 bottom-0 md:top-auto md:bottom-auto left-0 z-40 md:z-auto border-r border-slate-200 bg-white shrink-0 overflow-hidden transition-all duration-300 ease-in-out flex"
       >
         <div class="w-60 h-full p-3 flex flex-col justify-between shrink-0">
         <div class="space-y-4">
@@ -259,11 +337,16 @@
               <span class="text-xs font-bold">Написать / Бланк</span>
             </button>
 
-            <!-- Template Menu -->
-            <div 
-              v-if="showCreateMenu" 
+            <!-- Template Menu — the type can always be changed later, inside the compose modal
+                 itself, so picking one here is never a one-way commitment. -->
+            <div
+              v-if="showCreateMenu"
               class="absolute top-12 left-0 w-64 bg-white border border-slate-200 rounded-xl shadow-lg p-1.5 z-50 space-y-0.5"
             >
+              <button @click="openCreateModal('plain')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-900 rounded-lg text-xs flex items-center gap-2 font-semibold">
+                <i data-lucide="mail" class="w-3.5 h-3.5 text-slate-700"></i> Обычное письмо
+              </button>
+              <div class="h-px bg-slate-100 my-1"></div>
               <button @click="openCreateModal('vacation')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
                 <span>🏖</span> Заявление на отпуск
               </button>
@@ -280,7 +363,7 @@
                 <span>🖥️</span> Выдача оборудования
               </button>
               <div class="h-px bg-slate-100 my-1"></div>
-              <button @click="showFormBuilderModal = true; showCreateMenu = false; builderDocumentTemplate = null" class="w-full text-left p-2 hover:bg-slate-100 text-slate-900 rounded-lg text-xs flex items-center gap-2 font-semibold">
+              <button @click="openCreateModal('ai')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-900 rounded-lg text-xs flex items-center gap-2 font-semibold">
                 <i data-lucide="wand-2" class="w-3.5 h-3.5 text-slate-700"></i> AI Конструктор Форм
               </button>
             </div>
@@ -403,6 +486,15 @@
               <button class="p-1 hover:bg-slate-200/60 rounded text-slate-600">
                 <i data-lucide="more-vertical" class="w-3.5 h-3.5"></i>
               </button>
+
+              <!-- Public folders have no addressee — anyone can drop a document in here -->
+              <button
+                v-if="activeFolder.startsWith('public_')"
+                @click="openPublicDocModal"
+                class="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1"
+              >
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Добавить документ
+              </button>
             </div>
 
             <!-- Right Toolbar Controls & Split Mode Toggle -->
@@ -415,11 +507,12 @@
 
               <div class="h-4 w-px bg-slate-200"></div>
 
-              <!-- Split View Toggle -->
-              <button 
-                @click="isSplitView = !isSplitView" 
+              <!-- Split View Toggle — hidden on phones: two side-by-side panes need more width
+                   than a phone screen has, so the choice isn't offered there. -->
+              <button
+                @click="isSplitView = !isSplitView"
                 :class="isSplitView ? 'bg-slate-200 text-slate-900' : 'text-slate-500 hover:text-slate-900'"
-                class="p-1 rounded flex items-center gap-1 text-[11px] font-medium"
+                class="hidden md:flex p-1 rounded items-center gap-1 text-[11px] font-medium"
                 title="Переключить режим просмотра (Split / Full Table)"
               >
                 <i data-lucide="columns" class="w-3.5 h-3.5"></i>
@@ -436,7 +529,7 @@
               @click="selectEmail(email)"
               :class="[
                 selectedEmail?.id === email.id ? 'bg-slate-100/90 font-medium' : 'hover:bg-slate-50/90',
-                !email.isRead ? 'bg-white text-slate-900 font-semibold' : 'bg-slate-50/40 text-slate-700'
+                isUnreadForMe(email) ? 'bg-white text-slate-900 font-semibold' : 'bg-slate-50/40 text-slate-700'
               ]"
               class="px-4 py-2.5 cursor-pointer transition-all flex items-center gap-3 text-xs group"
             >
@@ -448,33 +541,43 @@
                 </button>
               </div>
 
-              <!-- Sender Name (Fixed Column Width) -->
-              <div class="w-36 md:w-44 shrink-0 truncate flex items-center gap-2">
+              <!-- Sender Name (Fixed Column Width — narrower on phones so subject gets the room) -->
+              <div class="w-20 sm:w-36 md:w-44 shrink-0 truncate flex items-center gap-2">
                 <img :src="email.sender.avatar" class="w-5 h-5 rounded-full object-cover border border-slate-200 shrink-0" />
-                <span :class="!email.isRead ? 'font-bold text-slate-900' : 'font-medium text-slate-700'" class="truncate text-xs">
+                <span :class="isUnreadForMe(email) ? 'font-bold text-slate-900' : 'font-medium text-slate-700'" class="truncate text-xs hidden sm:inline">
                   {{ email.sender.name }}
                 </span>
               </div>
 
-              <!-- Subject + Status Badge + Snippet (SINGLE HORIZONTAL LINE) -->
+              <!-- Subject + Status Badge + Snippet (SINGLE HORIZONTAL LINE on desktop, subject-only on phones) -->
               <div class="flex-1 min-w-0 flex items-center gap-2 truncate">
                 <!-- Subject -->
-                <span :class="!email.isRead ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'" class="truncate text-xs">
+                <span :class="isUnreadForMe(email) ? 'font-bold text-slate-900' : 'font-semibold text-slate-800'" class="truncate text-xs">
                   {{ email.subject }}
                 </span>
 
-                <!-- Form Status Tag Badge -->
-                <span 
-                  v-if="email.formPayload" 
+                <!-- Form Status Tag Badge — just the dot on phones, full label from sm up -->
+                <span
+                  v-if="email.formPayload"
                   :class="statusBadgeStyle(email.formPayload.status)"
-                  class="px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 shrink-0"
+                  class="px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1 shrink-0"
                 >
-                  <span class="w-1.5 h-1.5 rounded-full" :class="statusDotStyle(email.formPayload.status)"></span>
-                  {{ statusLabel(email.formPayload.status) }}
+                  <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="statusDotStyle(email.formPayload.status)"></span>
+                  <span class="hidden sm:inline">{{ statusLabel(email.formPayload.status) }}</span>
+                </span>
+
+                <!-- Deadline chip -->
+                <span
+                  v-if="deadlineStatus(email)"
+                  :class="deadlineStatus(email) === 'overdue' ? 'text-red-600' : deadlineStatus(email) === 'soon' ? 'text-amber-600' : 'text-slate-400'"
+                  class="text-[10px] font-semibold shrink-0 hidden md:flex items-center gap-0.5"
+                  :title="'Срок: ' + formatDateShort(email.formPayload.dueDate)"
+                >
+                  <i data-lucide="alarm-clock" class="w-3 h-3"></i>{{ formatDateShort(email.formPayload.dueDate) }}
                 </span>
 
                 <!-- Snippet Excerpt -->
-                <span class="text-slate-400 text-xs font-normal truncate">
+                <span class="text-slate-400 text-xs font-normal truncate hidden lg:inline">
                   - {{ email.snippet }}
                 </span>
               </div>
@@ -586,6 +689,22 @@
                     <i data-lucide="code" class="w-3.5 h-3.5"></i>
                   </button>
 
+                  <!-- Deadline / SLA badge — only meaningful while still pending -->
+                  <div
+                    v-if="deadlineStatus(selectedEmail)"
+                    :class="{
+                      'border-red-300 bg-red-50 text-red-800': deadlineStatus(selectedEmail) === 'overdue',
+                      'border-amber-300 bg-amber-50 text-amber-800': deadlineStatus(selectedEmail) === 'soon',
+                      'border-slate-200 bg-slate-50 text-slate-600': deadlineStatus(selectedEmail) === 'ok'
+                    }"
+                    class="border px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                  >
+                    <i data-lucide="alarm-clock" class="w-3.5 h-3.5"></i>
+                    <span v-if="deadlineStatus(selectedEmail) === 'overdue'">ПРОСРОЧЕНО: {{ formatDateShort(selectedEmail.formPayload.dueDate) }}</span>
+                    <span v-else-if="deadlineStatus(selectedEmail) === 'soon'">Дедлайн скоро: {{ formatDateShort(selectedEmail.formPayload.dueDate) }}</span>
+                    <span v-else>Срок: {{ formatDateShort(selectedEmail.formPayload.dueDate) }}</span>
+                  </div>
+
                   <!-- Status Resolution Stamp -->
                   <div v-if="selectedEmail.formPayload.status === 'approved'" class="border border-emerald-300 bg-emerald-50 text-emerald-800 px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5">
                     <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
@@ -617,7 +736,9 @@
                    renders the exact same A4 page here, in the compose preview, and nowhere else,
                    so what the sender previews is byte-for-byte what the approver later sees.
                    Falls back to the plain field grid for forms without a recognized template. -->
-              <official-document v-if="selectedEmail.formPayload.documentTemplate" :email="selectedEmail"></official-document>
+              <div v-if="selectedEmail.formPayload.documentTemplate" class="overflow-x-auto">
+                <official-document :email="selectedEmail"></official-document>
+              </div>
 
               <!-- Fallback: plain field grid for forms without a document template -->
               <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
@@ -689,7 +810,7 @@
               </div>
 
               <!-- UNIFIED ACTION BUTTONS (ONLY IF PENDING AND NOT CLAIMED BY SOMEONE ELSE) -->
-              <div v-if="selectedEmail.formPayload.status === 'pending' && canActOnEmail(selectedEmail)" class="flex items-center justify-end gap-2">
+              <div v-if="selectedEmail.formPayload.status === 'pending' && canActOnEmail(selectedEmail)" class="flex items-center flex-wrap justify-end gap-2">
 
                 <!-- Secondary Action: Reject -->
                 <button
@@ -857,7 +978,7 @@
               </span>
             </div>
 
-            <div v-for="email in allEmails" :key="email.id" class="space-y-2">
+            <div v-for="email in myRelevantEmails" :key="email.id" class="space-y-2">
               <div :class="email.sender.email === currentUser.email ? 'justify-end' : 'justify-start'" class="flex gap-2.5">
                 <img :src="email.sender.avatar" class="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0" />
                 <div class="max-w-md w-full space-y-1.5">
@@ -1025,7 +1146,7 @@
                 <div
                   v-for="(ev, idx) in calendarEventsByDay[day]"
                   :key="idx"
-                  :class="ev.kind === 'vacation' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-amber-100 text-amber-800 border-amber-200'"
+                  :class="calendarEventStyle(ev.kind)"
                   class="border rounded px-1 py-0.5 font-bold truncate text-[9px]"
                   :title="ev.label"
                 >
@@ -1224,46 +1345,55 @@
       </div>
     </div>
 
-    <!-- MODAL 4: GEMINI AI FORM BUILDER -->
+    <!-- MODAL 4: COMPOSE (plain email / document template / AI form builder — one unified modal) -->
     <div v-if="showFormBuilderModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
       <div :class="builderDocumentTemplate ? 'max-w-2xl' : 'max-w-lg'" class="bg-white p-5 rounded-2xl border border-slate-200 w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
           <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
             <i data-lucide="sparkles" class="w-4 h-4 text-slate-700"></i>
-            {{ builderDocumentTemplate ? 'Новый бланк' : 'AI Конструктор Форм & Сканер' }}
+            {{ builderMode === 'plain' ? 'Новое письмо' : builderDocumentTemplate ? 'Новый бланк' : 'AI Конструктор Форм & Сканер' }}
           </h3>
           <button @click="showFormBuilderModal = false" class="text-slate-400 hover:text-slate-900" title="Закрыть без создания"><i data-lucide="x" class="w-4 h-4"></i></button>
         </div>
 
-        <!-- Active official-document template — one click re-fills it (real AI when connected),
-             and a dedicated cross to back out of this template without creating anything. -->
-        <div v-if="builderDocumentTemplate" class="bg-slate-900 text-white p-3 rounded-xl flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2">
-            <i data-lucide="file-text" class="w-4 h-4"></i>
-            <span>Шаблон: <b>{{ documentTitle({ formPayload: { documentTemplate: builderDocumentTemplate } }) }}</b></span>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <button
-              @click="autofillTemplateWithAi"
-              :disabled="isGeneratingAiForm"
-              class="px-2.5 py-1.5 bg-white text-slate-900 rounded-lg text-[11px] font-semibold flex items-center gap-1"
-            >
-              <i v-show="!isGeneratingAiForm" data-lucide="wand-2" class="w-3.5 h-3.5"></i>
-              <i v-show="isGeneratingAiForm" data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
-              Автозаполнить
-            </button>
-            <button
-              @click="showFormBuilderModal = false"
-              class="p-1.5 hover:bg-white/10 rounded-lg text-white/70 hover:text-white"
-              title="Отменить — не создавать эту форму"
-            >
-              <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-          </div>
+        <!-- Type switcher — always visible, so a plain email can turn into a form (or back)
+             without starting over. Picking a template re-fills it immediately (real AI when
+             connected). -->
+        <div class="flex items-center gap-2">
+          <select v-model="builderTypeSelector" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold">
+            <option value="plain">✉️ Обычное письмо</option>
+            <option value="vacation">🏖 Заявление на отпуск</option>
+            <option value="expense">💳 Согласование счёта</option>
+            <option value="access">💻 Доступ к системе</option>
+            <option value="trip">🧳 Командировка</option>
+            <option value="equipment">🖥️ Выдача оборудования</option>
+            <option value="ai">🪄 Своя форма (ИИ-конструктор)</option>
+          </select>
+          <button
+            v-if="builderDocumentTemplate"
+            @click="autofillTemplateWithAi"
+            :disabled="isGeneratingAiForm"
+            class="px-2.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold flex items-center gap-1 shrink-0"
+          >
+            <i v-show="!isGeneratingAiForm" data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+            <i v-show="isGeneratingAiForm" data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i>
+            Автозаполнить
+          </button>
         </div>
 
-        <!-- Freeform text-to-form: only relevant when no fixed template is picked -->
-        <div v-if="!builderDocumentTemplate" class="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-2 text-xs">
+        <!-- Plain email body -->
+        <div v-if="builderMode === 'plain'">
+          <label class="block text-slate-600 mb-1 font-bold text-xs">Текст письма:</label>
+          <textarea
+            v-model="builderPlainBody"
+            rows="6"
+            placeholder="Напишите сообщение..."
+            class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs text-slate-800 focus:outline-none focus:border-slate-400 resize-none"
+          ></textarea>
+        </div>
+
+        <!-- Freeform text-to-form: only relevant in the AI-builder mode -->
+        <div v-if="builderMode === 'ai'" class="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-2 text-xs">
           <label class="block font-bold text-slate-800">🪄 Опишите заявку текстом:</label>
           <div class="flex gap-2">
             <input
@@ -1285,8 +1415,8 @@
           </div>
         </div>
 
-        <!-- Receipt scanner: relevant for freeform forms and specifically the expense template -->
-        <div v-if="!builderDocumentTemplate || builderDocumentTemplate === 'expense'" class="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-300 text-xs space-y-2.5">
+        <!-- Receipt scanner: relevant for the AI builder and specifically the expense template -->
+        <div v-if="builderMode === 'ai' || builderDocumentTemplate === 'expense'" class="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-300 text-xs space-y-2.5">
           <div class="flex items-center justify-center gap-2 text-slate-700 font-bold">
             <i data-lucide="camera" class="w-4 h-4"></i>
             <span>Сканер Счетов & Чеков</span>
@@ -1345,22 +1475,43 @@
           </div>
         </div>
 
-        <div>
-          <label class="block text-slate-600 mb-1 font-bold text-xs">{{ builderDocumentTemplate ? 'Тема письма:' : 'Название формы:' }}</label>
-          <input v-model="builderFormTitle" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-600 mb-1 font-bold text-xs">Кому:</label>
+            <select v-model="builderRecipientEmail" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs">
+              <option v-for="user in demoUsers" :key="user.id" :value="user.email">
+                {{ user.name }} ({{ user.role }}){{ user.email === currentUser.email ? ' — вы сами' : '' }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-600 mb-1 font-bold text-xs">Тема:</label>
+            <input v-model="builderFormTitle" type="text" placeholder="Тема письма..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold" />
+          </div>
+        </div>
+
+        <div v-if="builderMode !== 'plain'">
+          <label class="block text-slate-600 mb-1 font-bold text-xs">Срок на согласование (дней):</label>
+          <div class="flex items-center gap-2">
+            <input v-model.number="builderDueDays" type="number" min="1" max="60" class="w-20 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs" />
+            <span class="text-[10px] text-slate-400">Появится дедлайном в календаре у {{ demoUsers.find(u => u.email === builderRecipientEmail)?.name || 'получателя' }}</span>
+          </div>
         </div>
 
         <!-- TEMPLATE MODE: live A4 preview, editable in place — this is exactly what the
-             approver will later see, so the sender previews the real document, not a raw list. -->
-        <official-document
-          v-if="builderDocumentTemplate"
-          :email="builderPreviewEmail"
-          :editable="true"
-          @update-field="onBuilderFieldEdit"
-        ></official-document>
+             approver will later see, so the sender previews the real document, not a raw list.
+             The A4 sheet is a fixed 210mm wide, so on phones it scrolls horizontally inside this
+             wrapper rather than blowing out the modal/page width. -->
+        <div v-if="builderDocumentTemplate" class="overflow-x-auto -mx-5 px-5">
+          <official-document
+            :email="builderPreviewEmail"
+            :editable="true"
+            @update-field="onBuilderFieldEdit"
+          ></official-document>
+        </div>
 
-        <!-- FREEFORM MODE: plain label/value editor for AI-Конструктор custom forms -->
-        <div v-else class="space-y-2 text-xs">
+        <!-- AI-BUILDER MODE: plain label/value editor for custom forms -->
+        <div v-else-if="builderMode === 'ai'" class="space-y-2 text-xs">
           <label class="block text-slate-600 font-bold">Поля формы:</label>
           <div v-for="(field, idx) in builderFields" :key="idx" class="flex gap-2">
             <input v-model="field.label" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2" />
@@ -1370,7 +1521,33 @@
         </div>
 
         <button @click="createCustomFormEmail" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold">
-          Отправить бланк как письмо
+          {{ builderMode === 'plain' ? 'Отправить письмо' : 'Отправить бланк как письмо' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL 5: PUBLIC FOLDER DOCUMENT (no addressee — just gets dropped into the shared folder) -->
+    <div v-if="showPublicDocModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showPublicDocModal = false">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-sm text-slate-900">Новый документ в папку</h3>
+          <button @click="showPublicDocModal = false" class="text-slate-400 hover:text-slate-900"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <p class="text-[11px] text-slate-500">Публичная папка — без адресата. Документ просто сохранится здесь и будет виден всем, кто зайдёт в эту папку.</p>
+        <input
+          v-model="publicDocTitle"
+          type="text"
+          placeholder="Заголовок документа"
+          class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-semibold focus:outline-none focus:border-slate-400"
+        />
+        <textarea
+          v-model="publicDocBody"
+          rows="6"
+          placeholder="Текст документа..."
+          class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs focus:outline-none focus:border-slate-400 resize-none"
+        ></textarea>
+        <button @click="createPublicDocument" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold">
+          Опубликовать в папку
         </button>
       </div>
     </div>
@@ -1395,7 +1572,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted, onUpdated, nextTick } = Vue;
+    const { createApp, ref, reactive, computed, onMounted, onUpdated, nextTick, watch } = Vue;
 
     // Pure-JS SHA-256 fallback — crypto.subtle requires a secure context (HTTPS/localhost) and is
     // unavailable when this file is opened directly as file://, which is exactly how this
@@ -1487,13 +1664,74 @@
       try { localStorage.removeItem(key); } catch (err) { /* ignore */ }
     }
 
+    // Deterministic initials avatar (colored circle, no network) — used for accounts created in
+    // the app itself, so adding a new persona never depends on an external image host.
+    function generateAvatarDataUri(name) {
+      const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+      const hue = hash % 360;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" rx="50" fill="hsl(${hue},55%,45%)"/><text x="50" y="50" font-family="Arial, sans-serif" font-size="38" fill="white" text-anchor="middle" dominant-baseline="central">${initials}</text></svg>`;
+      return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+    }
+
     // Shared demo directory — top-level (not inside setup()) so the OfficialDocument component
-    // defined below can also resolve addressees without needing the whole app instance.
-    const demoUsers = [
+    // defined below can also resolve addressees without needing the whole app instance. Reactive
+    // (not a plain array) so accounts created from the persona switcher show up everywhere live.
+    const demoUsers = reactive([
       { id: '1', name: 'Асет Каримов', email: 'asset@company.com', role: 'Разработчик', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80' },
       { id: '2', name: 'Тимур Сатпаев', email: 'boss@company.com', role: 'Руководитель', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80' },
       { id: '3', name: 'Алена Бекова', email: 'deputy@company.com', role: 'Заместитель', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80' }
-    ];
+    ]);
+
+    function isSenderOf(email, user) {
+      return email.sender?.email === user.email;
+    }
+
+    function isRecipientOf(email, user) {
+      return (email.recipients || []).includes(user.email);
+    }
+
+    // Read state is tracked per-user (who has actually opened it), not a single shared flag —
+    // otherwise the sender marking their own copy "read" would also hide it as read for the
+    // recipient who never opened it.
+    function isReadByUser(email, user) {
+      return (email.readBy || []).includes(user.email);
+    }
+
+    // Short synthesized two-tone "ding" via Web Audio — no audio file/asset needed. Browsers
+    // start a fresh AudioContext in 'suspended' state until a user gesture has happened
+    // somewhere on the page; a notification triggered by an incoming sync event (not a direct
+    // click) would otherwise construct the graph but produce no sound at all. resume() unlocks
+    // it using whatever gesture already happened earlier in the session (switching accounts,
+    // clicking a folder, etc. all count).
+    function playNotificationSound() {
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        const ctx = new Ctx();
+        const fire = () => {
+          const o = ctx.createOscillator();
+          const g = ctx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(880, ctx.currentTime);
+          o.frequency.exponentialRampToValueAtTime(1318.5, ctx.currentTime + 0.12);
+          g.gain.setValueAtTime(0.001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+          o.connect(g);
+          g.connect(ctx.destination);
+          o.start();
+          o.stop(ctx.currentTime + 0.4);
+          o.onended = () => ctx.close();
+        };
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(fire).catch(() => {});
+        } else {
+          fire();
+        }
+      } catch (err) { /* audio unavailable, ignore */ }
+    }
 
     // Kazakhstan runs a single national timezone (Asia/Almaty, UTC+5, same offset as Astana since
     // the 2024 unification) — every timestamp in the app is shown in that zone.
@@ -1522,6 +1760,27 @@
       const month = parts.find(p => p.type === 'month').value;
       const year = parts.find(p => p.type === 'year').value;
       return `${day} ${RU_MONTHS_GENITIVE[parseInt(month, 10) - 1]} ${year} года`;
+    }
+
+    function formatDateShort(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Asia/Almaty', day: '2-digit', month: '2-digit', year: 'numeric' });
+    }
+
+    // Deadlines (SLA) — set at compose time ("approve within N days"), surfaced to the approver
+    // on the calendar and as a warning badge once it's close or has passed.
+    function daysUntil(iso) {
+      if (!iso) return null;
+      return Math.ceil((new Date(iso).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    }
+
+    function deadlineStatus(email) {
+      const due = email.formPayload?.dueDate;
+      if (!due || email.formPayload.status !== 'pending') return null;
+      const days = daysUntil(due);
+      if (days < 0) return 'overdue';
+      if (days <= 1) return 'soon';
+      return 'ok';
     }
 
     // Official Document Templates — render a form's fields as a formal corporate "Заявление"
@@ -1746,6 +2005,15 @@
       setup() {
         const syncChannel = new BroadcastChannel('actionmail_sync');
 
+        // Cross-device sync via a public MQTT broker (no backend of our own). Everyone who
+        // joins the same "room" name exchanges mail live, from separate browsers/devices —
+        // BroadcastChannel above only reaches other tabs of the same browser, this reaches out.
+        const mqttClientId = 'c-' + Math.random().toString(36).slice(2, 10);
+        const mqttRoomId = ref(safeStorageGet('actionmail_mqtt_room') || 'demo-public-room');
+        const mqttRoomInput = ref(mqttRoomId.value);
+        const mqttStatus = ref('connecting'); // 'connecting' | 'connected' | 'offline'
+        let mqttClient = null;
+
         const currentUser = ref(demoUsers[1]);
         const showUserDropdown = ref(false);
         const showApproveMenu = ref(false);
@@ -1754,6 +2022,11 @@
         const searchQuery = ref('');
         const showCreateMenu = ref(false);
         const isSplitView = ref(false); // Default to full-width Gmail single line view!
+        // Split view needs two side-by-side panes — forcibly drop it if the window narrows below
+        // the point where that still fits (e.g. resizing down, or rotating a tablet to portrait).
+        window.addEventListener('resize', () => {
+          if (window.innerWidth < 768) isSplitView.value = false;
+        });
         const showSecurityInfo = ref(false);
         const showSidebar = ref(window.innerWidth >= 768);
 
@@ -1762,6 +2035,9 @@
         const showEsignModal = ref(false);
         const showMiniAppModal = ref(false);
         const showFormBuilderModal = ref(false);
+        const showPublicDocModal = ref(false);
+        const publicDocTitle = ref('');
+        const publicDocBody = ref('');
         const targetEmailForAction = ref(null);
 
         // FaceID / WebAuthn simulated state machine
@@ -1849,12 +2125,41 @@
           { label: 'Период', type: 'date_range', value: 'Сентябрь 2026' }
         ]);
         const builderDocumentTemplate = ref(null); // 'vacation' | 'expense' | 'access' | 'trip' | 'equipment' | null
+        const builderMode = ref('plain'); // 'plain' | 'ai' — irrelevant once builderDocumentTemplate is set
+        const builderPlainBody = ref('');
+
+        // Who the draft goes to — an explicit, editable choice (any account, including yourself),
+        // not just an inferred default. Defaults sensibly when the compose modal opens.
+        const builderRecipientEmail = ref(defaultRecipientsFor(currentUser.value)[0]);
+        const builderDueDays = ref(3); // SLA: approver should decide within this many days
+
+        // Single switch driving the whole compose modal — plain email, a fixed document
+        // template, or the freeform AI builder. Changing it mid-compose is exactly what lets you
+        // start a plain email and turn it into a form (or back) without losing your place.
+        const builderTypeSelector = computed({
+          get() {
+            return builderDocumentTemplate.value || builderMode.value;
+          },
+          set(val) {
+            if (val === 'plain' || val === 'ai') {
+              builderMode.value = val;
+              builderDocumentTemplate.value = null;
+              if (val === 'plain') builderFormTitle.value = '';
+            } else {
+              builderMode.value = 'form';
+              builderDocumentTemplate.value = val;
+              builderFormTitle.value = documentTitle({ formPayload: { documentTemplate: val } });
+              builderFields.value = [];
+              autofillTemplateWithAi();
+            }
+          }
+        });
 
         // Live preview object fed into <official-document> while composing — the sender edits
         // fields here and sees literally the same A4 page the approver will receive later.
         const builderPreviewEmail = computed(() => ({
           sender: currentUser.value,
-          recipients: defaultRecipientsFor(currentUser.value),
+          recipients: [builderRecipientEmail.value],
           workflowInstanceId: 'черновик',
           timestamp: new Date().toISOString(),
           formPayload: {
@@ -1894,13 +2199,14 @@
             timestamp: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
             snippet: 'Прошу предоставить трудовой отпуск со следующего понедельника, проект полностью передан...',
             folder: 'inbox',
-            isRead: false,
+            readBy: ['asset@company.com'],
             isStarred: true,
             formPayload: {
               formType: 'vacation_request',
               documentTemplate: 'vacation',
               title: 'Заявление на отпуск (14 дней)',
               status: 'pending',
+              dueDate: new Date(Date.now() + 1000 * 60 * 60 * 20).toISOString(), // demo: due soon
               fields: [
                 { id: '1', label: 'Вид отпуска', type: 'text', value: 'Ежегодный оплачиваемый' },
                 { id: '2', label: 'Период отпуска', type: 'date_range', value: '01.09.2026 — 14.09.2026' },
@@ -1918,18 +2224,19 @@
             threadId: 'thread-405',
             workflowInstanceId: 'wf-expense-2026-089',
             sender: { name: 'Бухгалтерия', email: 'invoices@company.com', role: 'Финансы', avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80' },
-            recipients: ['boss@company.com'],
+            recipients: ['boss@company.com', 'deputy@company.com'],
             subject: 'Счет на оплату облачной инфраструктуры #459 (Hetzner Cloud GmbH)',
             timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
             snippet: 'Счет на оплату облачных серверов за Август 2026 ($1,450). Напоминание о необходимости проведения платежа...',
-            folder: 'public_invoices',
-            isRead: true,
+            folder: 'inbox',
+            readBy: ['boss@company.com', 'deputy@company.com'],
             isStarred: false,
             formPayload: {
               formType: 'expense_approval',
               documentTemplate: 'expense',
               title: 'Счет на оплату облака ($1,450)',
               status: 'pending',
+              dueDate: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // demo: overdue
               fields: [
                 { id: '1', label: 'Поставщик', type: 'text', value: 'Hetzner Online GmbH' },
                 { id: '2', label: 'Сумма', type: 'currency', value: '$ 1,450.00 (710,000 KZT)' },
@@ -1950,7 +2257,7 @@
             timestamp: new Date(Date.now() - 1000 * 60 * 500).toISOString(),
             snippet: 'Выберите удобный стол в опенспейсе через интерактивную 2D карту офиса прямо в теле письма...',
             folder: 'inbox',
-            isRead: true,
+            readBy: ['asset@company.com'],
             isStarred: false,
             formPayload: {
               formType: 'custom',
@@ -1963,6 +2270,55 @@
               ]
             },
             messagesInThread: [],
+            aiSummary: null
+          },
+          // Public folders have no addressee — these just sit here for whoever browses in.
+          {
+            id: 'doc-pub-1',
+            threadId: 'thread-pub-1',
+            workflowInstanceId: null,
+            sender: { name: 'Отдел закупок', email: 'procurement@company.com', role: 'Procurement', avatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100&auto=format&fit=crop&q=80' },
+            recipients: [],
+            subject: 'Приказ №14-ОД: Регламент оформления заявок на закупку',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+            snippet: 'Актуальная версия регламента подачи заявок на закупку товаров и услуг на 2026 год...',
+            folder: 'public_orders',
+            readBy: ['procurement@company.com'],
+            isStarred: false,
+            formPayload: null,
+            messagesInThread: [{ id: 'm-pub-1', author: 'Отдел закупок', authorEmail: 'procurement@company.com', content: 'Актуальная версия регламента подачи заявок на закупку товаров и услуг на 2026 год. Просьба ознакомиться всем руководителям отделов до конца месяца.', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString() }],
+            aiSummary: null
+          },
+          {
+            id: 'doc-pub-2',
+            threadId: 'thread-pub-2',
+            workflowInstanceId: null,
+            sender: { name: 'Бухгалтерия', email: 'boss@company.com', role: 'Главный бухгалтер', avatar: 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=100&auto=format&fit=crop&q=80' },
+            recipients: [],
+            subject: 'Реестр счетов на оплату — III квартал 2026',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+            snippet: 'Сводный реестр всех входящих счетов на оплату за третий квартал, для общего доступа...',
+            folder: 'public_invoices',
+            readBy: ['boss@company.com'],
+            isStarred: false,
+            formPayload: null,
+            messagesInThread: [{ id: 'm-pub-2', author: 'Бухгалтерия', authorEmail: 'boss@company.com', content: 'Сводный реестр всех входящих счетов на оплату за третий квартал. Открыт для общего доступа — обновляется по мере поступления новых счетов.', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString() }],
+            aiSummary: null
+          },
+          {
+            id: 'doc-pub-3',
+            threadId: 'thread-pub-3',
+            workflowInstanceId: null,
+            sender: { name: 'IT Служба поддержки', email: 'it-support@company.com', role: 'IT Support', avatar: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=100&auto=format&fit=crop&q=80' },
+            recipients: [],
+            subject: 'Плановые работы: обновление корпоративной почты 30.08.2026',
+            timestamp: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
+            snippet: 'В ночь с 30 на 31 августа возможны кратковременные перебои в работе почтового сервера...',
+            folder: 'public_helpdesk',
+            readBy: ['it-support@company.com'],
+            isStarred: false,
+            formPayload: null,
+            messagesInThread: [{ id: 'm-pub-3', author: 'IT Служба поддержки', authorEmail: 'it-support@company.com', content: 'В ночь с 30 на 31 августа 2026 возможны кратковременные перебои в работе почтового сервера в связи с плановым обновлением. Приносим извинения за неудобства.', timestamp: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString() }],
             aiSummary: null
           }
         ]);
@@ -2304,26 +2660,74 @@
         }
 
         // Computed Filters
+        // Real per-account mailbox semantics: which bucket an email falls into depends on the
+        // ACTIVE persona's relationship to it (sender vs. recipient), not a fixed folder string —
+        // exactly like a real mail client. Public (shared/team) folders stay visible to everyone
+        // regardless of role, per the Public Folders 2.0 / Claim System design.
         const filteredEmails = computed(() => {
+          const q = searchQuery.value.trim().toLowerCase();
+          const statusMatch = q.match(/^status:(\w+)$/);
+
           return allEmails.value.filter(e => {
-            if (activeFolder.value === 'starred') return e.isStarred;
-            if (activeFolder.value !== 'inbox' && e.folder !== activeFolder.value) return false;
-            if (searchQuery.value) {
-              const q = searchQuery.value.trim().toLowerCase();
-              const statusMatch = q.match(/^status:(\w+)$/);
-              if (statusMatch) return e.formPayload?.status === statusMatch[1];
-              return e.subject.toLowerCase().includes(q) || e.snippet.toLowerCase().includes(q);
+            if (statusMatch) {
+              if (e.formPayload?.status !== statusMatch[1]) return false;
+            } else if (q && !e.subject.toLowerCase().includes(q) && !e.snippet.toLowerCase().includes(q)) {
+              return false;
             }
-            return true;
+
+            if (activeFolder.value === 'starred') {
+              return e.isStarred && (isSenderOf(e, currentUser.value) || isRecipientOf(e, currentUser.value));
+            }
+            if (activeFolder.value === 'sent') {
+              return isSenderOf(e, currentUser.value);
+            }
+            if (activeFolder.value === 'archive') {
+              return isRecipientOf(e, currentUser.value) && e.formPayload && e.formPayload.status !== 'pending';
+            }
+            // A public folder is shared storage with no addressee at all — anyone can post a
+            // document there and it just sits, visible to whoever browses into that folder. It
+            // never appears in anyone's personal Входящие/Отправленные since it isn't sent to
+            // (or by, in the personal sense) anyone in particular.
+            if (activeFolder.value.startsWith('public_')) {
+              return e.folder === activeFolder.value;
+            }
+
+            // 'inbox' (default): if I'm the recipient, plain emails just live here like real mail
+            // and forms stay while pending (resolved ones move to "Архив решений"). If I'm the
+            // *original sender*, the thread only belongs in my inbox once the other side has
+            // actually replied — that reply is new incoming activity on a thread I started,
+            // exactly like a reply landing back in your inbox in real email.
+            if (isRecipientOf(e, currentUser.value)) {
+              return !e.formPayload || e.formPayload.status === 'pending';
+            }
+            if (isSenderOf(e, currentUser.value)) {
+              const msgs = e.messagesInThread || [];
+              const lastMsg = msgs[msgs.length - 1];
+              return !!lastMsg && lastMsg.authorEmail !== currentUser.value.email;
+            }
+            return false;
           });
         });
 
-        const pendingCount = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'pending').length);
-        const kanbanPending = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'pending' && !e.formPayload.claimedBy));
-        const kanbanReview = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'pending' && e.formPayload.claimedBy));
-        const kanbanApproved = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'approved'));
-        const kanbanRejected = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'rejected'));
-        const kanbanRevision = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'revision'));
+        // Shared by Kanban/Spike/Calendar: everything relevant to the active persona, strictly as
+        // sender or recipient — never someone else's request, even a "shared" one.
+        const myRelevantEmails = computed(() => allEmails.value.filter(e =>
+          isSenderOf(e, currentUser.value) || isRecipientOf(e, currentUser.value)
+        ));
+
+        const pendingCount = computed(() => allEmails.value.filter(e => e.formPayload?.status === 'pending' && isRecipientOf(e, currentUser.value)).length);
+
+        // Unread badge in the browser tab title itself — like Gmail/Slack, so a background tab
+        // still signals new mail without needing to be focused.
+        const unreadCountForMe = computed(() => allEmails.value.filter(e => isUnreadForMe(e)).length);
+        watch([unreadCountForMe, currentUser], ([count, user]) => {
+          document.title = count > 0 ? `(${count}) ActionMail — ${user.name}` : `ActionMail — ${user.name}`;
+        }, { immediate: true });
+        const kanbanPending = computed(() => myRelevantEmails.value.filter(e => e.formPayload?.status === 'pending' && !e.formPayload.claimedBy));
+        const kanbanReview = computed(() => myRelevantEmails.value.filter(e => e.formPayload?.status === 'pending' && e.formPayload.claimedBy));
+        const kanbanApproved = computed(() => myRelevantEmails.value.filter(e => e.formPayload?.status === 'approved'));
+        const kanbanRejected = computed(() => myRelevantEmails.value.filter(e => e.formPayload?.status === 'rejected'));
+        const kanbanRevision = computed(() => myRelevantEmails.value.filter(e => e.formPayload?.status === 'revision'));
 
         // Calendar View: always anchored to the real current date (new Date() = the machine's
         // actual clock), with prev/next navigation to browse other real months.
@@ -2347,6 +2751,16 @@
           const firstWeekday = new Date(y, m, 1).getDay();
           return (firstWeekday + 6) % 7;
         });
+
+        function calendarEventStyle(kind) {
+          const m = {
+            vacation: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            payment: 'bg-amber-100 text-amber-800 border-amber-200',
+            deadline: 'bg-sky-100 text-sky-800 border-sky-200',
+            overdue: 'bg-red-100 text-red-800 border-red-200'
+          };
+          return m[kind] || m.payment;
+        }
 
         function isToday(day) {
           const now = new Date();
@@ -2382,9 +2796,23 @@
           const daysInMonth = calendarDaysInMonth.value;
           for (let d = 1; d <= daysInMonth; d++) map[d] = [];
 
-          allEmails.value.forEach(email => {
+          myRelevantEmails.value.forEach(email => {
             const fp = email.formPayload;
             if (!fp) return;
+
+            // Deadlines (SLA) — set at compose time, shown on the day they're due so the
+            // approver sees exactly when a decision is needed.
+            if (fp.dueDate && fp.status === 'pending') {
+              const due = new Date(fp.dueDate);
+              if (due.getFullYear() === y && due.getMonth() === m) {
+                map[due.getDate()].push({
+                  kind: deadlineStatus(email) === 'overdue' ? 'overdue' : 'deadline',
+                  icon: '⏰',
+                  label: 'Срок: ' + email.subject.split(' ').slice(0, 2).join(' ')
+                });
+              }
+            }
+
             (fp.fields || []).forEach(field => {
               if (field.type === 'date_range') {
                 const rm = field.value.match(/(\d{1,2})\.(\d{2})\.(\d{4})\s*[—-]\s*(\d{1,2})\.(\d{2})\.(\d{4})/);
@@ -2414,10 +2842,18 @@
           return !!email.folder && email.folder.startsWith('public_');
         }
 
+        // Only an actual recipient can approve/reject/etc — the sender viewing their own sent
+        // item must never see action buttons meant for the person they sent it to.
         function canActOnEmail(email) {
+          if (!isRecipientOf(email, currentUser.value)) return false;
           const claimedBy = email.formPayload?.claimedBy;
-          if (!isPublicFolderEmail(email) || !claimedBy) return true;
+          if (!claimedBy) return true;
           return claimedBy.email === currentUser.value.email;
+        }
+
+        function isUnreadForMe(email) {
+          const isParticipant = isRecipientOf(email, currentUser.value) || isSenderOf(email, currentUser.value);
+          return isParticipant && !isReadByUser(email, currentUser.value);
         }
 
         function claimEmail(email) {
@@ -2445,7 +2881,55 @@
         function switchUser(user) {
           currentUser.value = user;
           showUserDropdown.value = false;
-          addToast('Смена Персоны', user.name);
+          selectedEmail.value = null;
+          activeFolder.value = 'inbox';
+
+          // Anything sent to this account while someone else was logged in still counts as
+          // "just arrived" the moment you open this mailbox — same as checking your phone and
+          // finding mail that came in while you were away.
+          const unread = allEmails.value.filter(e => isUnreadForMe(e)).length;
+          if (unread > 0) {
+            playNotificationSound();
+            addToast('Новые сообщения', `У вас ${unread} ${unread === 1 ? 'непрочитанное письмо' : 'непрочитанных письма'}`);
+          } else {
+            addToast('Вход выполнен', `Вы вошли как ${user.name}`);
+          }
+        }
+
+        // New account creation — lets you add extra demo personas beyond the initial three, so
+        // you can send a request to (and log in as) literally anyone for testing.
+        const showAddAccountForm = ref(false);
+        const newAccountName = ref('');
+        const newAccountRole = ref('');
+
+        const CYRILLIC_TO_LATIN = {
+          а:'a', б:'b', в:'v', г:'g', д:'d', е:'e', ё:'e', ж:'zh', з:'z', и:'i', й:'y',
+          к:'k', л:'l', м:'m', н:'n', о:'o', п:'p', р:'r', с:'s', т:'t', у:'u', ф:'f',
+          х:'kh', ц:'ts', ч:'ch', ш:'sh', щ:'shch', ъ:'', ы:'y', ь:'', э:'e', ю:'yu', я:'ya', ә:'a', і:'i', ң:'n', ғ:'g', ү:'u', ұ:'u', қ:'k', ө:'o', h:'h'
+        };
+        function transliterate(str) {
+          return str.toLowerCase().split('').map(ch => CYRILLIC_TO_LATIN[ch] ?? ch).join('');
+        }
+
+        function createAccount() {
+          const name = newAccountName.value.trim();
+          if (!name) { addToast('Нужно имя', 'Введите имя нового аккаунта'); return; }
+          const slug = transliterate(name).replace(/[^a-z\s]/g, '').trim().split(/\s+/).join('.');
+          const email = `${slug || 'user' + (demoUsers.length + 1)}@company.com`;
+          if (demoUsers.some(u => u.email === email)) { addToast('Уже существует', 'Аккаунт с таким именем уже есть'); return; }
+
+          const user = {
+            id: String(demoUsers.length + 1),
+            name,
+            email,
+            role: newAccountRole.value.trim() || 'Сотрудник',
+            avatar: generateAvatarDataUri(name)
+          };
+          demoUsers.push(user);
+          newAccountName.value = '';
+          newAccountRole.value = '';
+          showAddAccountForm.value = false;
+          addToast('Аккаунт создан', `${user.name} (${user.email})`);
         }
 
         function refreshList() {
@@ -2455,7 +2939,8 @@
 
         function selectEmail(email) {
           selectedEmail.value = email;
-          email.isRead = true;
+          if (!email.readBy) email.readBy = [];
+          if (!email.readBy.includes(currentUser.value.email)) email.readBy.push(currentUser.value.email);
           nextTick(() => safeCreateIcons());
         }
 
@@ -2617,38 +3102,54 @@
 
         function sendReply() {
           if (!newReplyText.value || !selectedEmail.value) return;
-          selectedEmail.value.messagesInThread.push({
+          const message = {
             id: 'm-' + Date.now(),
             author: currentUser.value.name,
             authorEmail: currentUser.value.email,
             content: newReplyText.value,
             timestamp: new Date().toISOString()
-          });
+          };
+          selectedEmail.value.messagesInThread.push(message);
+          // A reply is new activity for everyone else on the thread — including the original
+          // sender, who never gets marked as this email's "recipient" — so it goes unread for
+          // them again and reappears in their Входящие (see filteredEmails' inbox branch).
+          selectedEmail.value.readBy = [currentUser.value.email];
           newReplyText.value = '';
           addToast('Ответ отправлен', 'Сообщение добавлено');
+
+          const payload = toPlain({ type: 'REPLY_ADDED', emailId: selectedEmail.value.id, message });
+          syncChannel.postMessage(payload);
+          mqttPublish(payload);
         }
 
         function createCustomFormEmail() {
+          const isPlain = builderMode.value === 'plain';
+          const timestamp = new Date().toISOString();
+          const subject = builderFormTitle.value.trim() || (isPlain ? '(без темы)' : builderFormTitle.value);
+
           const newEmail = {
             id: 'msg-' + Date.now(),
             threadId: 'thread-' + Date.now(),
-            workflowInstanceId: 'wf-custom-' + Math.floor(Math.random() * 1000),
+            workflowInstanceId: isPlain ? null : 'wf-custom-' + Math.floor(Math.random() * 1000),
             sender: { ...currentUser.value },
-            recipients: defaultRecipientsFor(currentUser.value),
-            subject: builderFormTitle.value,
-            timestamp: new Date().toISOString(),
-            snippet: 'Сгенерирована новая интерактивная форма...',
+            recipients: [builderRecipientEmail.value],
+            subject,
+            timestamp,
+            snippet: isPlain ? builderPlainBody.value.slice(0, 90) : 'Сгенерирована новая интерактивная форма...',
             folder: 'inbox',
-            isRead: true,
+            readBy: [currentUser.value.email],
             isStarred: false,
-            formPayload: {
+            formPayload: isPlain ? null : {
               formType: builderDocumentTemplate.value ? builderDocumentTemplate.value + '_request' : 'custom',
               documentTemplate: builderDocumentTemplate.value,
               title: builderFormTitle.value,
               status: 'pending',
+              dueDate: new Date(Date.now() + builderDueDays.value * 24 * 60 * 60 * 1000).toISOString(),
               fields: builderFields.value.map((f, i) => ({ id: String(i), label: f.label, type: 'text', value: f.value || 'Заполнено' }))
             },
-            messagesInThread: [],
+            messagesInThread: isPlain
+              ? [{ id: 'm-' + Date.now(), author: currentUser.value.name, authorEmail: currentUser.value.email, content: builderPlainBody.value, timestamp }]
+              : [],
             aiSummary: null
           };
 
@@ -2656,35 +3157,64 @@
           selectedEmail.value = newEmail;
           showFormBuilderModal.value = false;
           builderDocumentTemplate.value = null;
+          builderPlainBody.value = '';
 
-          syncChannel.postMessage(toPlain({ type: 'EMAIL_CREATED', email: newEmail }));
-          addToast('Форма отправлена', 'Письмо добавлено');
+          const payload = toPlain({ type: 'EMAIL_CREATED', email: newEmail });
+          syncChannel.postMessage(payload);
+          mqttPublish(payload);
+          if (isRecipientOf(newEmail, currentUser.value)) playNotificationSound();
+          addToast(isPlain ? 'Письмо отправлено' : 'Форма отправлена', isPlain ? 'Доставлено получателю' : 'Письмо добавлено');
           nextTick(() => safeCreateIcons());
         }
 
-        // Picks an official document template and immediately auto-fills it (real AI when
-        // connected, sensible local defaults otherwise) — the form never opens blank.
+        // Opens the compose modal in the requested mode ('plain', a template name, or 'ai') —
+        // templates auto-fill immediately (real AI when connected, sensible defaults otherwise),
+        // and the type can always be changed afterward via the in-modal selector.
         function openCreateModal(type) {
           showCreateMenu.value = false;
           builderFields.value = [];
-          if (type === 'vacation') {
-            builderFormTitle.value = 'Заявление на отпуск';
-            builderDocumentTemplate.value = 'vacation';
-          } else if (type === 'expense') {
-            builderFormTitle.value = 'Заявка на закупку / оплату';
-            builderDocumentTemplate.value = 'expense';
-          } else if (type === 'access') {
-            builderFormTitle.value = 'Заявка на доступ к системе';
-            builderDocumentTemplate.value = 'access';
-          } else if (type === 'trip') {
-            builderFormTitle.value = 'Служебная записка о командировании';
-            builderDocumentTemplate.value = 'trip';
-          } else if (type === 'equipment') {
-            builderFormTitle.value = 'Служебная записка на выдачу оборудования';
-            builderDocumentTemplate.value = 'equipment';
-          }
+          builderPlainBody.value = '';
+          builderRecipientEmail.value = defaultRecipientsFor(currentUser.value)[0];
+          builderTypeSelector.value = type;
           showFormBuilderModal.value = true;
-          autofillTemplateWithAi();
+        }
+
+        // Public folders have no addressee at all — anyone can drop a document in and it just
+        // sits there for whoever browses into that folder, unlike personal mail.
+        function openPublicDocModal() {
+          publicDocTitle.value = '';
+          publicDocBody.value = '';
+          showPublicDocModal.value = true;
+        }
+
+        function createPublicDocument() {
+          if (!publicDocTitle.value.trim()) { addToast('Нужен заголовок', 'Введите название документа'); return; }
+          const timestamp = new Date().toISOString();
+          const newDoc = {
+            id: 'doc-' + Date.now(),
+            threadId: 'thread-' + Date.now(),
+            workflowInstanceId: null,
+            sender: { ...currentUser.value },
+            recipients: [],
+            subject: publicDocTitle.value,
+            timestamp,
+            snippet: publicDocBody.value.slice(0, 90),
+            folder: activeFolder.value,
+            readBy: [currentUser.value.email],
+            isStarred: false,
+            formPayload: null,
+            messagesInThread: [{ id: 'm-' + Date.now(), author: currentUser.value.name, authorEmail: currentUser.value.email, content: publicDocBody.value, timestamp }],
+            aiSummary: null
+          };
+          allEmails.value.unshift(newDoc);
+          selectedEmail.value = newDoc;
+          showPublicDocModal.value = false;
+
+          const payload = toPlain({ type: 'EMAIL_CREATED', email: newDoc });
+          syncChannel.postMessage(payload);
+          mqttPublish(payload);
+          addToast('Документ добавлен', publicDocTitle.value);
+          nextTick(() => safeCreateIcons());
         }
 
         function addToast(title, body) {
@@ -2721,27 +3251,98 @@
           return 'bg-amber-500 animate-pulse';
         }
 
-        syncChannel.onmessage = (event) => {
-          const { type, emailId, resolvedBy, targetStatus, email, claimedBy } = event.data;
+        // Shared by both sync transports: same-browser BroadcastChannel (other tabs) and the
+        // MQTT broker (other devices entirely). Whichever transport delivers an event first wins;
+        // the other's copy of the same event is a harmless no-op thanks to the id checks below.
+        function handleSyncEvent(data) {
+          if (data._origin && data._origin === mqttClientId) return; // our own publish echoed back by the broker
+          const { type, emailId, resolvedBy, targetStatus, email, claimedBy, message } = data;
           if (type === 'WORKFLOW_RESOLVED') {
             const found = allEmails.value.find(e => e.id === emailId);
-            if (found && found.formPayload) {
+            if (found && found.formPayload && found.formPayload.status !== targetStatus) {
               found.formPayload.status = targetStatus;
               found.formPayload.resolvedBy = resolvedBy;
               addToast('Синхронизация', `${resolvedBy.name} изменил статус на ${targetStatus.toUpperCase()}`);
             }
           } else if (type === 'EMAIL_CREATED') {
-            allEmails.value.unshift(email);
-            addToast('Новое письмо', email.subject);
+            if (!allEmails.value.find(e => e.id === email.id)) {
+              allEmails.value.unshift(email);
+              if (isRecipientOf(email, currentUser.value)) playNotificationSound();
+              addToast('Новое письмо', email.subject);
+            }
           } else if (type === 'CLAIMED') {
             const found = allEmails.value.find(e => e.id === emailId);
-            if (found && found.formPayload) {
+            if (found && found.formPayload && !found.formPayload.claimedBy) {
               found.formPayload.claimedBy = claimedBy;
               addToast('Синхронизация', `${claimedBy.name} взял(а) заявку в работу`);
             }
+          } else if (type === 'REPLY_ADDED') {
+            const found = allEmails.value.find(e => e.id === emailId);
+            if (found && !found.messagesInThread.some(m => m.id === message.id)) {
+              found.messagesInThread.push(message);
+              found.readBy = [message.authorEmail];
+              const isParticipant = isSenderOf(found, currentUser.value) || isRecipientOf(found, currentUser.value);
+              if (isParticipant && message.authorEmail !== currentUser.value.email) {
+                playNotificationSound();
+                addToast('Новый ответ', found.subject);
+              }
+            }
           }
           nextTick(() => safeCreateIcons());
-        };
+        }
+
+        syncChannel.onmessage = (event) => handleSyncEvent(event.data);
+
+        // MQTT over WebSockets against a public test broker — this is the actual "no backend,
+        // but still cross-device" transport. If the CDN script failed to load, or the broker is
+        // unreachable, the app just stays on BroadcastChannel (same-browser tabs only).
+        function connectMqtt() {
+          if (typeof mqtt === 'undefined') { mqttStatus.value = 'offline'; return; }
+          try {
+            mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+              clientId: mqttClientId,
+              clean: true,
+              connectTimeout: 8000,
+              reconnectPeriod: 4000
+            });
+            mqttClient.on('connect', () => {
+              mqttStatus.value = 'connected';
+              mqttClient.subscribe('actionmail/' + mqttRoomId.value);
+            });
+            mqttClient.on('message', (topic, message) => {
+              try {
+                handleSyncEvent(JSON.parse(message.toString()));
+              } catch (err) { /* malformed payload from another client, ignore */ }
+            });
+            mqttClient.on('reconnect', () => { mqttStatus.value = 'connecting'; });
+            mqttClient.on('error', () => { mqttStatus.value = 'offline'; });
+            mqttClient.on('close', () => { mqttStatus.value = 'offline'; });
+          } catch (err) {
+            mqttStatus.value = 'offline';
+          }
+        }
+
+        function mqttPublish(payload) {
+          if (!mqttClient || !mqttClient.connected) return;
+          mqttClient.publish('actionmail/' + mqttRoomId.value, JSON.stringify({ ...payload, _origin: mqttClientId }));
+        }
+
+        function changeMqttRoom(newRoom) {
+          const room = (newRoom || '').trim();
+          if (!room) return;
+          if (mqttClient && mqttClient.connected) {
+            mqttClient.unsubscribe('actionmail/' + mqttRoomId.value);
+            mqttRoomId.value = room;
+            mqttClient.subscribe('actionmail/' + mqttRoomId.value);
+          } else {
+            mqttRoomId.value = room;
+          }
+          mqttRoomInput.value = room;
+          safeStorageSet('actionmail_mqtt_room', room);
+          addToast('Комната изменена', 'Синхронизация с: ' + room);
+        }
+
+        connectMqtt();
 
         onMounted(() => {
           safeCreateIcons();
@@ -2780,6 +3381,15 @@
           showEsignModal,
           showMiniAppModal,
           showFormBuilderModal,
+          showPublicDocModal,
+          publicDocTitle,
+          publicDocBody,
+          openPublicDocModal,
+          createPublicDocument,
+          mqttStatus,
+          mqttRoomId,
+          mqttRoomInput,
+          changeMqttRoom,
           faceIdStage,
           faceIdVideoEl,
           faceIdCameraActive,
@@ -2793,6 +3403,7 @@
           allEmails,
           selectedEmail,
           filteredEmails,
+          myRelevantEmails,
           pendingCount,
           kanbanPending,
           kanbanReview,
@@ -2805,13 +3416,20 @@
           calendarLeadingBlanks,
           calendarEventsByDay,
           isToday,
+          calendarEventStyle,
           calendarPrevMonth,
           calendarNextMonth,
           calendarGoToday,
           builderFormTitle,
           builderFields,
           builderDocumentTemplate,
+          builderMode,
+          builderPlainBody,
+          builderTypeSelector,
+          isUnreadForMe,
           builderPreviewEmail,
+          builderRecipientEmail,
+          builderDueDays,
           onBuilderFieldEdit,
           autofillTemplateWithAi,
           documentTitle,
@@ -2838,6 +3456,10 @@
           newReplyText,
           toasts,
           switchUser,
+          showAddAccountForm,
+          newAccountName,
+          newAccountRole,
+          createAccount,
           refreshList,
           selectEmail,
           isPublicFolderEmail,
@@ -2860,6 +3482,9 @@
           playVoiceBriefing,
           formatTime,
           formatDateFull,
+          formatDateShort,
+          daysUntil,
+          deadlineStatus,
           statusLabel,
           signMethodLabel,
           statusBadgeStyle,

@@ -154,7 +154,7 @@
             <span class="w-0.5 bg-slate-800 sound-wave-bar rounded-full"></span>
             <span class="w-0.5 bg-slate-800 sound-wave-bar rounded-full"></span>
           </div>
-          <span class="hidden md:inline">{{ isPlayingAudio ? 'Озвучка...' : '🎧 AI Брифинг' }}</span>
+          <span class="hidden md:inline">{{ isPlayingAudio ? 'Озвучка...' : 'AI Брифинг' }}</span>
         </button>
 
         <!-- View Mode Switcher -->
@@ -348,19 +348,19 @@
               </button>
               <div class="h-px bg-slate-100 my-1"></div>
               <button @click="openCreateModal('vacation')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
-                <span>🏖</span> Заявление на отпуск
+                <i data-lucide="palmtree" class="w-3.5 h-3.5 text-slate-500"></i> Заявление на отпуск
               </button>
               <button @click="openCreateModal('expense')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
-                <span>💳</span> Согласование счета
+                <i data-lucide="credit-card" class="w-3.5 h-3.5 text-slate-500"></i> Согласование счета
               </button>
               <button @click="openCreateModal('access')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
-                <span>💻</span> Доступ к Gitlab
+                <i data-lucide="monitor" class="w-3.5 h-3.5 text-slate-500"></i> Доступ к Gitlab
               </button>
               <button @click="openCreateModal('trip')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
-                <span>🧳</span> Командировка
+                <i data-lucide="luggage" class="w-3.5 h-3.5 text-slate-500"></i> Командировка
               </button>
               <button @click="openCreateModal('equipment')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-800 rounded-lg text-xs flex items-center gap-2">
-                <span>🖥️</span> Выдача оборудования
+                <i data-lucide="monitor-cog" class="w-3.5 h-3.5 text-slate-500"></i> Выдача оборудования
               </button>
               <div class="h-px bg-slate-100 my-1"></div>
               <button @click="openCreateModal('ai')" class="w-full text-left p-2 hover:bg-slate-100 text-slate-900 rounded-lg text-xs flex items-center gap-2 font-semibold">
@@ -932,7 +932,7 @@
                 >
                   <i v-show="!isGeneratingReply" data-lucide="wand" class="w-3 h-3 text-slate-600"></i>
                   <i v-show="isGeneratingReply" data-lucide="loader-2" class="w-3 h-3 animate-spin text-slate-600"></i>
-                  <span>💡 AI Ответ</span>
+                  <span>AI Ответ</span>
                 </button>
               </div>
 
@@ -1361,13 +1361,13 @@
              connected). -->
         <div class="flex items-center gap-2">
           <select v-model="builderTypeSelector" class="flex-1 bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold">
-            <option value="plain">✉️ Обычное письмо</option>
-            <option value="vacation">🏖 Заявление на отпуск</option>
-            <option value="expense">💳 Согласование счёта</option>
-            <option value="access">💻 Доступ к системе</option>
-            <option value="trip">🧳 Командировка</option>
-            <option value="equipment">🖥️ Выдача оборудования</option>
-            <option value="ai">🪄 Своя форма (ИИ-конструктор)</option>
+            <option value="plain">Обычное письмо</option>
+            <option value="vacation">Заявление на отпуск</option>
+            <option value="expense">Согласование счёта</option>
+            <option value="access">Доступ к системе</option>
+            <option value="trip">Командировка</option>
+            <option value="equipment">Выдача оборудования</option>
+            <option value="ai">Своя форма (ИИ-конструктор)</option>
           </select>
           <button
             v-if="builderDocumentTemplate"
@@ -1394,7 +1394,7 @@
 
         <!-- Freeform text-to-form: only relevant in the AI-builder mode -->
         <div v-if="builderMode === 'ai'" class="bg-slate-50 border border-slate-200 p-3 rounded-xl space-y-2 text-xs">
-          <label class="block font-bold text-slate-800">🪄 Опишите заявку текстом:</label>
+          <label class="block font-bold text-slate-800">Опишите заявку текстом:</label>
           <div class="flex gap-2">
             <input
               v-model="aiPromptInput"

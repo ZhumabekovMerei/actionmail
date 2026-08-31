@@ -17,6 +17,9 @@
        broker, with no backend of our own. Falls back to same-tab-group BroadcastChannel sync
        only if this fails to load (offline, ad-blocker, etc). -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <!-- MSAL Browser — client-only OAuth (PKCE) against Microsoft Graph, so a real Outlook inbox
+       can be connected with no backend of our own; Microsoft's login endpoint IS the backend. -->
+  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
   
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@500;700&display=swap');
@@ -281,6 +284,18 @@
                 <button @click="createAccount" class="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-[11px] font-semibold">Создать</button>
               </div>
             </div>
+
+            <div class="h-px bg-slate-100 my-1"></div>
+
+            <!-- Real inbox via Microsoft Graph — the connected account behaves exactly like a
+                 demo persona everywhere else in the app once it's in demoUsers. -->
+            <button @click.stop="connectOutlook" :disabled="isConnectingOutlook" class="w-full text-left p-2 hover:bg-slate-50 text-slate-700 rounded-lg flex items-center gap-2.5 text-xs">
+              <div class="w-6 h-6 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
+                <i v-show="!isConnectingOutlook" data-lucide="mail-plus" class="w-3.5 h-3.5 text-sky-700"></i>
+                <i v-show="isConnectingOutlook" data-lucide="loader-2" class="w-3.5 h-3.5 text-sky-700 animate-spin"></i>
+              </div>
+              <span>{{ isConnectingOutlook ? 'Подключение...' : 'Подключить Outlook (реальная почта)' }}</span>
+            </button>
 
             <div class="h-px bg-slate-100 my-1"></div>
 
@@ -1667,6 +1682,33 @@
         ></textarea>
         <button @click="createPublicDocument" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold">
           Опубликовать в папку
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL 6: OUTLOOK SETUP — one-time Client ID entry (BYOK-style, same as the Gemini key
+         modal: stored only in localStorage, sent nowhere except directly to Microsoft). -->
+    <div v-if="showOutlookSetupModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showOutlookSetupModal = false">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-5 space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="font-bold text-sm text-slate-900">Подключение Outlook</h3>
+          <button @click="showOutlookSetupModal = false" class="text-slate-400 hover:text-slate-900"><i data-lucide="x" class="w-4 h-4"></i></button>
+        </div>
+        <p class="text-[11px] text-slate-500 leading-relaxed">
+          Нужен один раз Client ID вашего приложения в Azure AD. Создайте его в
+          <span class="font-mono">portal.azure.com → Azure Active Directory → App registrations → New registration</span>,
+          платформа Redirect URI — <span class="font-semibold">Single-page application (SPA)</span>, значение —
+          адрес этого сайта. В API permissions добавьте <span class="font-mono">Mail.Read</span>, <span class="font-mono">Mail.Send</span>, <span class="font-mono">User.Read</span>.
+          Client ID хранится только в этом браузере (localStorage) и нигде не передаётся, кроме прямых запросов к Microsoft.
+        </p>
+        <input
+          v-model="msClientIdInput"
+          type="text"
+          placeholder="Application (client) ID"
+          class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-mono focus:outline-none focus:border-slate-400"
+        />
+        <button @click="saveOutlookClientIdAndConnect" class="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-semibold">
+          Сохранить и войти
         </button>
       </div>
     </div>
@@ -3079,7 +3121,175 @@
           addToast('Аккаунт создан', `${user.name} (${user.email})`);
         }
 
+        // --- Microsoft Graph: real Outlook mail, client-only OAuth (no backend of our own) ---
+        // Microsoft's own login endpoint is the "backend" here — this is a public SPA client
+        // (PKCE), the only kind of OAuth client that's safe to run with no server component.
+        const msClientIdInput = ref('');
+        const showOutlookSetupModal = ref(false);
+        const isConnectingOutlook = ref(false);
+        let msalInstance = null;
+        const GRAPH_SCOPES = ['Mail.Read', 'Mail.Send', 'User.Read'];
+
+        function ensureMsalInstance() {
+          const clientId = safeStorageGet('actionmail_ms_client_id');
+          if (!clientId) return null;
+          if (typeof msal === 'undefined') {
+            addToast('Outlook недоступен', 'Не удалось загрузить библиотеку MSAL');
+            return null;
+          }
+          if (!msalInstance) {
+            msalInstance = new msal.PublicClientApplication({
+              auth: {
+                clientId,
+                authority: 'https://login.microsoftonline.com/common',
+                redirectUri: window.location.origin + window.location.pathname
+              },
+              cache: { cacheLocation: 'localStorage' }
+            });
+          }
+          return msalInstance;
+        }
+
+        function connectOutlook() {
+          if (!safeStorageGet('actionmail_ms_client_id')) {
+            msClientIdInput.value = '';
+            showOutlookSetupModal.value = true;
+            return;
+          }
+          performOutlookLogin();
+        }
+
+        function saveOutlookClientIdAndConnect() {
+          const id = msClientIdInput.value.trim();
+          if (!id) { addToast('Нужен Client ID', 'Вставьте Application (client) ID из Azure'); return; }
+          safeStorageSet('actionmail_ms_client_id', id);
+          showOutlookSetupModal.value = false;
+          performOutlookLogin();
+        }
+
+        async function performOutlookLogin() {
+          isConnectingOutlook.value = true;
+          showUserDropdown.value = false;
+          try {
+            const instance = ensureMsalInstance();
+            if (!instance) return;
+            const result = await instance.loginPopup({ scopes: GRAPH_SCOPES });
+            const account = result.account;
+            let user = demoUsers.find(u => u.email === account.username);
+            if (!user) {
+              user = {
+                id: 'graph-' + account.homeAccountId,
+                name: account.name || account.username,
+                email: account.username,
+                role: 'Реальная почта (Outlook)',
+                avatar: generateAvatarDataUri(account.name || account.username),
+                isGraphAccount: true,
+                department: '—', employeeId: '—', phone: '—', hireDate: ''
+              };
+              demoUsers.push(user);
+            }
+            currentUser.value = user;
+            currentView.value = 'cabinet';
+            addToast('Outlook подключён', account.username);
+            await fetchOutlookMail(user);
+          } catch (err) {
+            addToast('Не удалось подключиться', (err && err.message) || 'Ошибка авторизации Microsoft');
+          } finally {
+            isConnectingOutlook.value = false;
+          }
+        }
+
+        async function getGraphAccessToken(user) {
+          const instance = ensureMsalInstance();
+          if (!instance) return null;
+          const accounts = instance.getAllAccounts();
+          const account = accounts.find(a => a.username === user.email) || accounts[0];
+          if (!account) return null;
+          try {
+            const result = await instance.acquireTokenSilent({ scopes: GRAPH_SCOPES, account });
+            return result.accessToken;
+          } catch (err) {
+            const result = await instance.acquireTokenPopup({ scopes: GRAPH_SCOPES, account });
+            return result.accessToken;
+          }
+        }
+
+        // A Graph message mapped into exactly the shape the rest of the app already understands
+        // (allEmails' single unified shape) — real mail is always "plain" here, no approval
+        // workflow attached, so the whole list/detail/read-state/search machinery just works.
+        function mapGraphMessage(msg, user) {
+          const fromAddr = msg.from?.emailAddress?.address || 'unknown@outlook.com';
+          const fromName = msg.from?.emailAddress?.name || fromAddr;
+          const bodyText = (msg.body?.content || msg.bodyPreview || '').replace(/<[^>]+>/g, ' ').trim();
+          return {
+            id: 'graph-' + msg.id,
+            threadId: 'graph-thread-' + (msg.conversationId || msg.id),
+            workflowInstanceId: null,
+            sender: { name: fromName, email: fromAddr, role: '', avatar: generateAvatarDataUri(fromName) },
+            recipients: (msg.toRecipients || []).map(r => r.emailAddress.address),
+            subject: msg.subject || '(без темы)',
+            timestamp: msg.receivedDateTime,
+            snippet: (msg.bodyPreview || '').slice(0, 90),
+            folder: 'inbox',
+            readBy: msg.isRead ? [user.email] : [],
+            isStarred: false,
+            formPayload: null,
+            messagesInThread: [{ id: 'graph-m-' + msg.id, author: fromName, authorEmail: fromAddr, content: bodyText.slice(0, 4000), timestamp: msg.receivedDateTime }],
+            aiSummary: null,
+            source: 'graph',
+            graphId: msg.id
+          };
+        }
+
+        async function fetchOutlookMail(user) {
+          const token = await getGraphAccessToken(user);
+          if (!token) return;
+          const res = await fetch(
+            'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=25&$select=id,subject,from,toRecipients,receivedDateTime,bodyPreview,body,isRead,conversationId',
+            { headers: { Authorization: 'Bearer ' + token } }
+          );
+          if (!res.ok) {
+            addToast('Ошибка Graph API', 'Не удалось загрузить письма (' + res.status + ')');
+            return;
+          }
+          const data = await res.json();
+          const existingIds = new Set(allEmails.value.filter(e => e.graphId).map(e => e.graphId));
+          const fresh = (data.value || []).filter(m => !existingIds.has(m.id)).map(m => mapGraphMessage(m, user));
+          if (fresh.length) {
+            allEmails.value.unshift(...fresh);
+            addToast('Outlook', `Загружено писем: ${fresh.length}`);
+          }
+          nextTick(() => safeCreateIcons());
+        }
+
+        // Real send, alongside (not instead of) the normal local copy every compose already
+        // creates — so an actual person's real inbox receives it too.
+        async function sendViaOutlookIfConnected(user, toEmail, subject, bodyText) {
+          if (!user.isGraphAccount) return;
+          try {
+            const token = await getGraphAccessToken(user);
+            if (!token) return;
+            await fetch('https://graph.microsoft.com/v1.0/me/sendMail', {
+              method: 'POST',
+              headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: {
+                  subject,
+                  body: { contentType: 'Text', content: bodyText },
+                  toRecipients: [{ emailAddress: { address: toEmail } }]
+                }
+              })
+            });
+            addToast('Отправлено через Outlook', toEmail);
+          } catch (err) {
+            addToast('Не удалось отправить через Outlook', (err && err.message) || 'Ошибка Graph API');
+          }
+        }
+
         function refreshList() {
+          if (currentUser.value.isGraphAccount) {
+            fetchOutlookMail(currentUser.value);
+          }
           addToast('Синхронизация', 'Список обновился');
           nextTick(() => safeCreateIcons());
         }
@@ -3319,6 +3529,7 @@
           mqttPublish(payload);
           if (isRecipientOf(newEmail, currentUser.value)) playNotificationSound();
           addToast(isPlain ? 'Письмо отправлено' : 'Форма отправлена', isPlain ? 'Доставлено получателю' : 'Письмо добавлено');
+          if (isPlain) sendViaOutlookIfConnected(currentUser.value, builderRecipientEmail.value, subject, builderPlainBody.value);
           nextTick(() => safeCreateIcons());
         }
 
@@ -3619,6 +3830,11 @@
           newAccountName,
           newAccountRole,
           createAccount,
+          msClientIdInput,
+          showOutlookSetupModal,
+          isConnectingOutlook,
+          connectOutlook,
+          saveOutlookClientIdAndConnect,
           refreshList,
           selectEmail,
           isPublicFolderEmail,
